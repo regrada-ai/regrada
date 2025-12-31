@@ -9,7 +9,12 @@ on:
       upload_latest:
         description: Update releases/latest.txt
         required: false
-        default: "true"
+        type: boolean
+        default: true
+
+permissions:
+  id-token: write
+  contents: read
 
 jobs:
   build-and-upload:
@@ -41,10 +46,10 @@ jobs:
         run: |
           set -euo pipefail
           out="regrada_${VERSION}_${{ matrix.goos }}_${{ matrix.goarch }}"
-          GOOS="${{ matrix.goos }}" GOARCH="${{ matrix.goarch }}" CGO_ENABLED=0 go build -o "$out" .
+          GOOS="${{ matrix.goos }}" GOARCH="${{ matrix.goarch }}" CGO_ENABLED=0 go build -o regrada .
           mkdir -p "dist/$VERSION"
-          tar -czf "dist/$VERSION/${out}.tar.gz" "$out"
-          rm "$out"
+          tar -czf "dist/$VERSION/${out}.tar.gz" regrada
+          rm regrada
           echo "$VERSION" > dist/latest.txt
 
       - name: Configure AWS credentials
@@ -59,7 +64,7 @@ jobs:
           set -euo pipefail
           out="regrada_${VERSION}_${{ matrix.goos }}_${{ matrix.goarch }}.tar.gz"
           aws s3 cp "dist/$VERSION/$out" "s3://$S3_BUCKET/$S3_PREFIX/$VERSION/$out"
-          if [ "${{ inputs.upload_latest }}" = "true" ] && [ "${{ matrix.goos }}" = "linux" ] && [ "${{ matrix.goarch }}" = "amd64" ]; then
+          if ${{ inputs.upload_latest }} && [ "${{ matrix.goos }}" = "linux" ] && [ "${{ matrix.goarch }}" = "amd64" ]; then
             aws s3 cp dist/latest.txt "s3://$S3_BUCKET/$S3_PREFIX/latest.txt"
             aws s3 cp install.sh "s3://$S3_BUCKET/install.sh"
           fi
