@@ -312,17 +312,34 @@ func newLLMProxy(config *RegradaConfig) (*LLMProxy, error) {
 		},
 	}
 
-	// Set up known provider URLs
-	proxy.providers["openai"], _ = url.Parse("https://api.openai.com")
-	proxy.providers["anthropic"], _ = url.Parse("https://api.anthropic.com")
-
-	// Add custom provider if configured
-	if config.Provider.BaseURL != "" {
-		customURL, err := url.Parse(config.Provider.BaseURL)
-		if err == nil {
-			proxy.providers["custom"] = customURL
+	// Set up provider URL based on config
+	var targetURL *url.URL
+	switch config.Provider.Type {
+	case "openai":
+		targetURL, _ = url.Parse("https://api.openai.com")
+	case "anthropic":
+		targetURL, _ = url.Parse("https://api.anthropic.com")
+	case "azure", "azure-openai":
+		if config.Provider.BaseURL == "" {
+			return nil, fmt.Errorf("Azure provider requires base_url in config")
 		}
+		targetURL, err = url.Parse(config.Provider.BaseURL)
+		if err != nil {
+			return nil, fmt.Errorf("invalid Azure base_url: %w", err)
+		}
+	case "custom":
+		if config.Provider.BaseURL == "" {
+			return nil, fmt.Errorf("Custom provider requires base_url in config")
+		}
+		targetURL, err = url.Parse(config.Provider.BaseURL)
+		if err != nil {
+			return nil, fmt.Errorf("invalid custom base_url: %w", err)
+		}
+	default:
+		return nil, fmt.Errorf("unsupported provider type: %s", config.Provider.Type)
 	}
+
+	proxy.providers[config.Provider.Type] = targetURL
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", proxy.handleRequest)
@@ -339,15 +356,11 @@ func newLLMProxy(config *RegradaConfig) (*LLMProxy, error) {
 func (p *LLMProxy) handleRequest(w http.ResponseWriter, r *http.Request) {
 	startTime := time.Now()
 
-	// Determine target based on X-Regrada-Target header or path
-	targetProvider := r.Header.Get("X-Regrada-Target")
-	if targetProvider == "" {
-		targetProvider = "openai" // default
-	}
-
+	// Use the configured provider type
+	targetProvider := p.config.Provider.Type
 	targetURL, ok := p.providers[targetProvider]
 	if !ok {
-		http.Error(w, "Unknown provider", http.StatusBadGateway)
+		http.Error(w, fmt.Sprintf("Provider %s not configured", targetProvider), http.StatusBadGateway)
 		return
 	}
 
@@ -548,19 +561,27 @@ func buildProxyEnv(proxyAddr string, config *RegradaConfig) []string {
 	env := os.Environ()
 	proxyURL := fmt.Sprintf("http://%s", proxyAddr)
 
-	// OpenAI SDK
-	env = append(env, fmt.Sprintf("OPENAI_BASE_URL=%s", proxyURL))
-	env = append(env, fmt.Sprintf("OPENAI_API_BASE=%s", proxyURL)) // older SDK versions
+	// Set HTTP_PROXY and HTTPS_PROXY for transparent interception
+	// This works for most HTTP clients without requiring code changes
+	env = append(env, fmt.Sprintf("HTTP_PROXY=%s", proxyURL))
+	env = append(env, fmt.Sprintf("HTTPS_PROXY=%s", proxyURL))
+	env = append(env, fmt.Sprintf("http_proxy=%s", proxyURL))
+	env = append(env, fmt.Sprintf("https_proxy=%s", proxyURL))
 
-	// Anthropic SDK
-	env = append(env, fmt.Sprintf("ANTHROPIC_BASE_URL=%s", proxyURL))
-
-	// Azure OpenAI - needs special header
-	env = append(env, fmt.Sprintf("AZURE_OPENAI_ENDPOINT=%s", proxyURL))
-
-	// Generic proxy settings (for custom implementations)
-	env = append(env, fmt.Sprintf("LLM_API_BASE=%s", proxyURL))
-	env = append(env, fmt.Sprintf("REGRADA_PROXY=%s", proxyURL))
+	// Also set provider-specific env vars as fallback
+	switch config.Provider.Type {
+	case "openai":
+		env = append(env, fmt.Sprintf("OPENAI_BASE_URL=%s", proxyURL))
+		env = append(env, fmt.Sprintf("OPENAI_API_BASE=%s", proxyURL))
+	case "anthropic":
+		env = append(env, fmt.Sprintf("ANTHROPIC_BASE_URL=%s", proxyURL))
+	case "azure", "azure-openai":
+		env = append(env, fmt.Sprintf("AZURE_OPENAI_ENDPOINT=%s", proxyURL))
+	case "custom":
+		env = append(env, fmt.Sprintf("OLLAMA_HOST=%s", proxyURL))
+		env = append(env, fmt.Sprintf("API_BASE_URL=%s", proxyURL))
+		env = append(env, fmt.Sprintf("BASE_URL=%s", proxyURL))
+	}
 
 	// Mark that we're running under regrada
 	env = append(env, "REGRADA_TRACING=1")

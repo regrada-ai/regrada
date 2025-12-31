@@ -232,14 +232,21 @@ func runTest(test TestCase, config *RegradaConfig, verbose bool) TestResult {
 		fmt.Printf("  Running: %s... ", test.Name)
 	}
 
-	// Simulate running the test (in real implementation, this would:
-	// 1. Load the prompt file or use inline prompt
-	// 2. Call the LLM via the configured provider
-	// 3. Run each check against the response)
+	// Load trace for this test
+	trace, err := loadTestTrace(test.Name, config)
+	if err != nil {
+		result.Status = "error"
+		result.Error = fmt.Sprintf("Failed to load trace: %v", err)
+		if verbose {
+			fmt.Println(lipgloss.NewStyle().Foreground(lipgloss.Color("196")).Render("✗ error"))
+			fmt.Printf("      %s\n", result.Error)
+		}
+		return result
+	}
 
-	// For now, we'll simulate the check execution
+	// Run each check against the trace
 	for _, check := range test.Checks {
-		checkResult := runCheck(check, test, config)
+		checkResult := runCheck(check, trace, test, config)
 		result.CheckResults = append(result.CheckResults, checkResult)
 
 		if !checkResult.Passed {
@@ -265,7 +272,55 @@ func runTest(test TestCase, config *RegradaConfig, verbose bool) TestResult {
 	return result
 }
 
-func runCheck(check string, test TestCase, config *RegradaConfig) CheckResult {
+func loadTestTrace(testName string, config *RegradaConfig) (*LLMTrace, error) {
+	// Load the latest trace session from .regrada/traces/
+	traceDir := filepath.Join(".regrada", "traces")
+
+	// Find the most recent trace file
+	files, err := filepath.Glob(filepath.Join(traceDir, "*.json"))
+	if err != nil || len(files) == 0 {
+		return nil, fmt.Errorf("no trace files found in %s", traceDir)
+	}
+
+	// Sort by modification time to get the latest
+	var latestFile string
+	var latestTime time.Time
+	for _, file := range files {
+		info, err := os.Stat(file)
+		if err != nil {
+			continue
+		}
+		if info.ModTime().After(latestTime) {
+			latestTime = info.ModTime()
+			latestFile = file
+		}
+	}
+
+	if latestFile == "" {
+		return nil, fmt.Errorf("no valid trace files found")
+	}
+
+	// Load the trace session
+	data, err := os.ReadFile(latestFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read trace file: %w", err)
+	}
+
+	var session TraceSession
+	if err := json.Unmarshal(data, &session); err != nil {
+		return nil, fmt.Errorf("failed to parse trace file: %w", err)
+	}
+
+	// For now, return the first trace in the session
+	// TODO: Match traces to tests based on test metadata
+	if len(session.Traces) == 0 {
+		return nil, fmt.Errorf("no traces found in session")
+	}
+
+	return &session.Traces[0], nil
+}
+
+func runCheck(check string, trace *LLMTrace, test TestCase, config *RegradaConfig) CheckResult {
 	// Parse check type and parameters
 	checkType := check
 	var checkParam string
@@ -280,23 +335,29 @@ func runCheck(check string, test TestCase, config *RegradaConfig) CheckResult {
 		Passed: true,
 	}
 
-	// In a real implementation, these would actually run against LLM responses
-	// For now, we simulate based on check type
+	// Run checks against actual trace data
 	switch checkType {
 	case "schema_valid":
-		// Would validate response against expected schema
-		result.Passed = true
-		result.Message = "Response matches expected schema"
+		// Validate response against expected JSON schema
+		result = validateSchema(trace, checkParam)
 
 	case "tool_called":
-		// Would verify specific tool was called
-		result.Passed = true
-		result.Message = fmt.Sprintf("Tool '%s' was called", checkParam)
+		// Verify specific tool was called
+		result = checkToolCalled(trace, checkParam)
 
 	case "no_tool_called":
-		// Would verify no tools were called
-		result.Passed = true
-		result.Message = "No tools were called"
+		// Verify no tools were called
+		if len(trace.ToolCalls) == 0 {
+			result.Passed = true
+			result.Message = "No tools were called"
+		} else {
+			result.Passed = false
+			toolNames := make([]string, len(trace.ToolCalls))
+			for i, tc := range trace.ToolCalls {
+				toolNames[i] = tc.Name
+			}
+			result.Message = fmt.Sprintf("Expected no tool calls, but found: %s", strings.Join(toolNames, ", "))
+		}
 
 	case "grounded_in_retrieval":
 		// Would verify response uses retrieved context
@@ -324,9 +385,18 @@ func runCheck(check string, test TestCase, config *RegradaConfig) CheckResult {
 		result.Message = "Response stays on topic"
 
 	case "response_time":
-		// Would check latency
-		result.Passed = true
-		result.Message = fmt.Sprintf("Response time within %s", checkParam)
+		// Check latency against threshold
+		if checkParam != "" {
+			var thresholdMs int
+			fmt.Sscanf(checkParam, "%dms", &thresholdMs)
+			if int(trace.Latency) <= thresholdMs {
+				result.Passed = true
+				result.Message = fmt.Sprintf("Response time %dms within threshold %dms", trace.Latency, thresholdMs)
+			} else {
+				result.Passed = false
+				result.Message = fmt.Sprintf("Response time %dms exceeds threshold %dms", trace.Latency, thresholdMs)
+			}
+		}
 
 	case "length":
 		// Would check response length
@@ -345,6 +415,116 @@ func runCheck(check string, test TestCase, config *RegradaConfig) CheckResult {
 	}
 
 	return result
+}
+
+func validateSchema(trace *LLMTrace, schemaPath string) CheckResult {
+	result := CheckResult{
+		Check:  "schema_valid: " + schemaPath,
+		Passed: false,
+	}
+
+	// Load the schema file
+	schemaData, err := os.ReadFile(schemaPath)
+	if err != nil {
+		result.Message = fmt.Sprintf("Failed to load schema file: %v", err)
+		return result
+	}
+
+	// Parse the schema
+	var schema map[string]interface{}
+	if err := json.Unmarshal(schemaData, &schema); err != nil {
+		result.Message = fmt.Sprintf("Failed to parse schema: %v", err)
+		return result
+	}
+
+	// Parse the response body to get the actual output
+	var responseData map[string]interface{}
+	if err := json.Unmarshal(trace.Response.Body, &responseData); err != nil {
+		result.Message = fmt.Sprintf("Failed to parse response body: %v", err)
+		return result
+	}
+
+	// Basic schema validation
+	// Check if required fields exist and types match
+	if requiredFields, ok := schema["required"].([]interface{}); ok {
+		for _, field := range requiredFields {
+			fieldName := field.(string)
+			if _, exists := responseData[fieldName]; !exists {
+				result.Message = fmt.Sprintf("Required field '%s' missing from response", fieldName)
+				return result
+			}
+		}
+	}
+
+	// Validate properties types if specified
+	if properties, ok := schema["properties"].(map[string]interface{}); ok {
+		for propName, propSchema := range properties {
+			propSchemaMap := propSchema.(map[string]interface{})
+			expectedType, hasType := propSchemaMap["type"].(string)
+
+			if hasType {
+				if actualValue, exists := responseData[propName]; exists {
+					actualType := getJSONType(actualValue)
+					if actualType != expectedType {
+						result.Message = fmt.Sprintf("Field '%s' has type '%s', expected '%s'", propName, actualType, expectedType)
+						return result
+					}
+				}
+			}
+		}
+	}
+
+	result.Passed = true
+	result.Message = "Response matches expected schema"
+	return result
+}
+
+func checkToolCalled(trace *LLMTrace, expectedToolName string) CheckResult {
+	result := CheckResult{
+		Check:  "tool_called: " + expectedToolName,
+		Passed: false,
+	}
+
+	// Check if the expected tool was called
+	for _, toolCall := range trace.ToolCalls {
+		if toolCall.Name == expectedToolName {
+			result.Passed = true
+			result.Message = fmt.Sprintf("Tool '%s' was called", expectedToolName)
+			return result
+		}
+	}
+
+	// Tool was not called
+	if len(trace.ToolCalls) == 0 {
+		result.Message = fmt.Sprintf("Tool '%s' was not called (no tools were called)", expectedToolName)
+	} else {
+		toolNames := make([]string, len(trace.ToolCalls))
+		for i, tc := range trace.ToolCalls {
+			toolNames[i] = tc.Name
+		}
+		result.Message = fmt.Sprintf("Tool '%s' was not called (called: %s)", expectedToolName, strings.Join(toolNames, ", "))
+	}
+
+	return result
+}
+
+func getJSONType(value interface{}) string {
+	switch value.(type) {
+	case string:
+		return "string"
+	case float64, int, int64:
+		return "number"
+	case bool:
+		return "boolean"
+	case []interface{}:
+		return "array"
+	case map[string]interface{}:
+		return "object"
+	case nil:
+		return "null"
+	default:
+		return "unknown"
+	}
 }
 
 func compareWithBaselineResults(current *EvalResult, baselinePath string) *BaselineComparison {
