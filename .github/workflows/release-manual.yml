@@ -46,10 +46,10 @@ jobs:
         run: |
           set -euo pipefail
           out="regrada_${VERSION}_${{ matrix.goos }}_${{ matrix.goarch }}"
-          GOOS="${{ matrix.goos }}" GOARCH="${{ matrix.goarch }}" CGO_ENABLED=0 go build -o "$out" .
+          GOOS="${{ matrix.goos }}" GOARCH="${{ matrix.goarch }}" CGO_ENABLED=0 go build -o regrada .
           mkdir -p "dist/$VERSION"
-          tar -czf "dist/$VERSION/${out}.tar.gz" "$out"
-          rm "$out"
+          tar -czf "dist/$VERSION/${out}.tar.gz" regrada
+          rm regrada
           echo "$VERSION" > dist/latest.txt
 
       - name: Configure AWS credentials
