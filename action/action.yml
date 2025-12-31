@@ -1,0 +1,96 @@
+name: 'Regrada - AI Regression Tests'
+description: 'Detect behavioral regressions in LLM-powered apps before they hit production'
+author: 'Regrada'
+
+branding:
+  icon: 'shield'
+  color: 'purple'
+
+inputs:
+  tests:
+    description: 'Path to test suite file'
+    required: false
+    default: 'evals/tests.yaml'
+  baseline:
+    description: 'Path to baseline file'
+    required: false
+    default: '.regrada/baseline.json'
+  fail-on-regression:
+    description: 'Fail the workflow if regressions are detected'
+    required: false
+    default: 'true'
+  fail-on-failure:
+    description: 'Fail the workflow if any test fails (not just regressions)'
+    required: false
+    default: 'false'
+  comment-on-pr:
+    description: 'Post results as a PR comment'
+    required: false
+    default: 'true'
+  working-directory:
+    description: 'Working directory for running tests'
+    required: false
+    default: '.'
+
+outputs:
+  total:
+    description: 'Total number of tests'
+    value: ${{ steps.run.outputs.total }}
+  passed:
+    description: 'Number of passed tests'
+    value: ${{ steps.run.outputs.passed }}
+  failed:
+    description: 'Number of failed tests'
+    value: ${{ steps.run.outputs.failed }}
+  regressions:
+    description: 'Number of regressions (tests that were passing but now fail)'
+    value: ${{ steps.run.outputs.regressions }}
+  result:
+    description: 'Overall result: success, failure, or regression'
+    value: ${{ steps.run.outputs.result }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.21'
+        cache: false
+
+    - name: Build Regrada
+      shell: bash
+      run: |
+        cd ${{ github.action_path }}
+        go build -o regrada .
+        echo "${{ github.action_path }}" >> $GITHUB_PATH
+
+    - name: Run Evaluations
+      id: run
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        bash ${{ github.action_path }}/run-evaluations.sh \
+          "${{ inputs.tests }}" \
+          "${{ inputs.baseline }}" \
+          "${{ inputs.fail-on-regression }}" \
+          "${{ inputs.fail-on-failure }}"
+
+    - name: Comment on PR
+      if: github.event_name == 'pull_request' && inputs.comment-on-pr == 'true'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const commentScript = require('${{ github.action_path }}/comment-on-pr.js');
+          await commentScript({
+            github,
+            context,
+            workdir: '${{ inputs.working-directory }}'
+          });
+
+    - name: Check Result
+      if: steps.run.outputs.exit_code == '1'
+      shell: bash
+      run: |
+        echo "::error::Regrada detected regressions or failures"
+        exit 1
