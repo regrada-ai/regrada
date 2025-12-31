@@ -1,0 +1,65 @@
+name: Release (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version (e.g. 1.0.0)
+        required: true
+      upload_latest:
+        description: Update releases/latest.txt
+        required: false
+        default: "true"
+
+jobs:
+  build-and-upload:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+    env:
+      VERSION: ${{ inputs.version }}
+      S3_BUCKET: ${{ secrets.S3_BUCKET }}
+      S3_PREFIX: releases
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="regrada_${VERSION}_${{ matrix.goos }}_${{ matrix.goarch }}"
+          GOOS="${{ matrix.goos }}" GOARCH="${{ matrix.goarch }}" CGO_ENABLED=0 go build -o "$out" .
+          mkdir -p "dist/$VERSION"
+          tar -czf "dist/$VERSION/${out}.tar.gz" "$out"
+          rm "$out"
+          echo "$VERSION" > dist/latest.txt
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Upload to S3
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="regrada_${VERSION}_${{ matrix.goos }}_${{ matrix.goarch }}.tar.gz"
+          aws s3 cp "dist/$VERSION/$out" "s3://$S3_BUCKET/$S3_PREFIX/$VERSION/$out"
+          if [ "${{ inputs.upload_latest }}" = "true" ] && [ "${{ matrix.goos }}" = "linux" ] && [ "${{ matrix.goarch }}" = "amd64" ]; then
+            aws s3 cp dist/latest.txt "s3://$S3_BUCKET/$S3_PREFIX/latest.txt"
+          fi
