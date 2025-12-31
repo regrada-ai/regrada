@@ -9,14 +9,15 @@ import (
 
 var rootCmd = &cobra.Command{
 	Use:   "regrada",
-	Short: "Regrada CLI - A powerful command-line tool",
-	Long: `Regrada is a CLI tool that provides various commands for managing your workflows.
-	
+	Short: "Regrada - CI for AI systems",
+	Long: `Regrada is a CI tool for AI systems that detects behavioral
+regressions in LLM-powered apps before they hit production.
+
 Available commands:
   init  - Initialize a new regrada project
-  trace - Trace execution or operations
-  diff  - Compare and show differences
-  gate  - Manage gates and controls`,
+  trace - Run evaluations and capture traces
+  diff  - Compare evaluation results
+  gate  - Manage quality gates`,
 	Run: func(cmd *cobra.Command, args []string) {
 		if len(args) == 0 {
 			cmd.Help()
@@ -31,7 +32,6 @@ func Execute() error {
 }
 
 func init() {
-	// Global flags can be added here
 	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "Enable verbose output")
 }
 
