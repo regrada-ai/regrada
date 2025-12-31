@@ -33,11 +33,20 @@ echo "Downloading $url"
 curl -fsSL "$url" -o "$tmpdir/$asset"
 
 tar -C "$tmpdir" -xzf "$tmpdir/$asset"
-chmod +x "$tmpdir/regrada"
+if [ -f "$tmpdir/regrada" ]; then
+  bin="$tmpdir/regrada"
+else
+  bin=$(ls "$tmpdir"/regrada_* 2>/dev/null | head -n 1 || true)
+  if [ -z "$bin" ]; then
+    echo "Expected regrada binary in archive, but none found." >&2
+    exit 1
+  fi
+fi
+chmod +x "$bin"
 
 install_dir="$HOME/.local/bin"
 mkdir -p "$install_dir"
-mv "$tmpdir/regrada" "$install_dir/regrada"
+mv "$bin" "$install_dir/regrada"
 
 if ! echo "$PATH" | grep -q "$install_dir"; then
   echo "Installed to $install_dir, but it's not on PATH."
