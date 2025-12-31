@@ -69,7 +69,8 @@ func init() {
 	traceCmd.Flags().Bool("no-proxy", false, "Run without proxy (use existing traces)")
 }
 
-// LLMTrace represents a captured LLM API call
+// LLMTrace represents a captured LLM API call with request/response details.
+// It includes metadata such as latency, token counts, and tool calls.
 type LLMTrace struct {
 	ID           string            `json:"id"`
 	Timestamp    time.Time         `json:"timestamp"`
@@ -85,6 +86,7 @@ type LLMTrace struct {
 	Metadata     map[string]string `json:"metadata,omitempty"`
 }
 
+// TraceRequest contains the HTTP request details of an LLM API call.
 type TraceRequest struct {
 	Method  string            `json:"method"`
 	Path    string            `json:"path"`
@@ -92,12 +94,14 @@ type TraceRequest struct {
 	Body    json.RawMessage   `json:"body,omitempty"`
 }
 
+// TraceResponse contains the HTTP response details of an LLM API call.
 type TraceResponse struct {
 	StatusCode int               `json:"status_code"`
 	Headers    map[string]string `json:"headers,omitempty"`
 	Body       json.RawMessage   `json:"body,omitempty"`
 }
 
+// ToolCall represents a function/tool invocation by the LLM.
 type ToolCall struct {
 	ID       string          `json:"id"`
 	Name     string          `json:"name"`

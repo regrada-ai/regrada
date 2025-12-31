@@ -70,151 +70,23 @@ runs:
       shell: bash
       working-directory: ${{ inputs.working-directory }}
       run: |
-        set +e
-
-        regrada run \
-          --ci \
-          --tests "${{ inputs.tests }}" \
-          --baseline "${{ inputs.baseline }}" \
-          --output json > .regrada/results.json 2>&1
-
-        EXIT_CODE=$?
-
-        # Parse results
-        if [ -f .regrada/results.json ]; then
-          TOTAL=$(jq -r '.total_tests // 0' .regrada/results.json)
-          PASSED=$(jq -r '.passed // 0' .regrada/results.json)
-          FAILED=$(jq -r '.failed // 0' .regrada/results.json)
-          REGRESSIONS=$(jq -r '.regressions // 0' .regrada/results.json)
-        else
-          TOTAL=0
-          PASSED=0
-          FAILED=0
-          REGRESSIONS=0
-        fi
-
-        echo "total=$TOTAL" >> $GITHUB_OUTPUT
-        echo "passed=$PASSED" >> $GITHUB_OUTPUT
-        echo "failed=$FAILED" >> $GITHUB_OUTPUT
-        echo "regressions=$REGRESSIONS" >> $GITHUB_OUTPUT
-
-        # Determine result
-        if [ "$REGRESSIONS" -gt 0 ]; then
-          echo "result=regression" >> $GITHUB_OUTPUT
-        elif [ "$FAILED" -gt 0 ]; then
-          echo "result=failure" >> $GITHUB_OUTPUT
-        else
-          echo "result=success" >> $GITHUB_OUTPUT
-        fi
-
-        # Print summary to logs
-        echo "## Regrada Results" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
-        echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
-        echo "| Total | $TOTAL |" >> $GITHUB_STEP_SUMMARY
-        echo "| Passed | $PASSED |" >> $GITHUB_STEP_SUMMARY
-        echo "| Failed | $FAILED |" >> $GITHUB_STEP_SUMMARY
-        echo "| Regressions | $REGRESSIONS |" >> $GITHUB_STEP_SUMMARY
-
-        # Determine exit code based on inputs
-        if [ "${{ inputs.fail-on-regression }}" = "true" ] && [ "$REGRESSIONS" -gt 0 ]; then
-          echo "exit_code=1" >> $GITHUB_OUTPUT
-        elif [ "${{ inputs.fail-on-failure }}" = "true" ] && [ "$FAILED" -gt 0 ]; then
-          echo "exit_code=1" >> $GITHUB_OUTPUT
-        else
-          echo "exit_code=0" >> $GITHUB_OUTPUT
-        fi
+        bash ${{ github.action_path }}/action/run-evaluations.sh \
+          "${{ inputs.tests }}" \
+          "${{ inputs.baseline }}" \
+          "${{ inputs.fail-on-regression }}" \
+          "${{ inputs.fail-on-failure }}"
 
     - name: Comment on PR
       if: github.event_name == 'pull_request' && inputs.comment-on-pr == 'true'
       uses: actions/github-script@v7
       with:
         script: |
-          const fs = require('fs');
-          const workdir = '${{ inputs.working-directory }}';
-          const resultsPath = workdir === '.' ? '.regrada/results.json' : `${workdir}/.regrada/results.json`;
-
-          let result;
-          try {
-            result = JSON.parse(fs.readFileSync(resultsPath, 'utf8'));
-          } catch (e) {
-            console.log('Could not read results:', e.message);
-            return;
-          }
-
-          let status = '✅';
-          if (result.regressions > 0) status = '🔴';
-          else if (result.failed > 0) status = '⚠️';
-
-          let body = `## ${status} Regrada AI Test Results\n\n`;
-          body += `| Tests | Passed | Failed | Regressions |\n`;
-          body += `|:-----:|:------:|:------:|:-----------:|\n`;
-          body += `| ${result.total_tests} | ${result.passed} | ${result.failed} | ${result.regressions} |\n\n`;
-
-          if (result.regressions > 0 && result.comparison?.new_failures) {
-            body += `### 🔴 Regressions Detected\n\n`;
-            body += `These tests were **passing** in the baseline but are now **failing**:\n\n`;
-            result.comparison.new_failures.forEach(name => {
-              body += `- \`${name}\`\n`;
-            });
-            body += `\n`;
-          }
-
-          if (result.failed > 0) {
-            body += `<details><summary>View Failed Tests</summary>\n\n`;
-            result.test_results
-              .filter(t => t.status === 'failed')
-              .forEach(t => {
-                body += `#### \`${t.name}\`\n`;
-                t.checks
-                  .filter(c => !c.passed)
-                  .forEach(c => {
-                    body += `- **${c.check}**: ${c.message || 'Failed'}\n`;
-                  });
-                body += `\n`;
-              });
-            body += `</details>\n\n`;
-          }
-
-          if (result.comparison?.new_passes?.length > 0) {
-            body += `### ✅ Improvements\n\n`;
-            body += `These tests were failing but are now passing:\n\n`;
-            result.comparison.new_passes.forEach(name => {
-              body += `- \`${name}\`\n`;
-            });
-            body += `\n`;
-          }
-
-          body += `---\n`;
-          body += `*[Regrada](https://github.com/matiasmolinolo/regrada) - CI for AI*`;
-
-          // Find existing comment
-          const { data: comments } = await github.rest.issues.listComments({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            issue_number: context.issue.number,
+          const commentScript = require('${{ github.action_path }}/action/comment-on-pr.js');
+          await commentScript({
+            github,
+            context,
+            workdir: '${{ inputs.working-directory }}'
           });
-
-          const existing = comments.find(c =>
-            c.user.type === 'Bot' && c.body.includes('Regrada AI Test Results')
-          );
-
-          if (existing) {
-            await github.rest.issues.updateComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              comment_id: existing.id,
-              body: body
-            });
-          } else {
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: body
-            });
-          }
 
     - name: Check Result
       if: steps.run.outputs.exit_code == '1'

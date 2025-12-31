@@ -44,7 +44,8 @@ func init() {
 	initCmd.Flags().BoolP("yes", "y", false, "Use default values without interactive prompts")
 }
 
-// RegradaConfig represents the complete configuration for a regrada project
+// RegradaConfig represents the complete configuration for a Regrada project.
+// It is persisted as .regrada.yaml in the project root.
 type RegradaConfig struct {
 	Version  string         `yaml:"version"`
 	Project  string         `yaml:"project"`
@@ -56,12 +57,15 @@ type RegradaConfig struct {
 	Output   OutputConfig   `yaml:"output"`
 }
 
+// ProviderConfig defines the LLM provider settings for evaluations.
+// Supported providers: openai, anthropic, azure-openai, custom.
 type ProviderConfig struct {
 	Type    string `yaml:"type"`
 	BaseURL string `yaml:"base_url,omitempty"`
 	Model   string `yaml:"model,omitempty"`
 }
 
+// CaptureConfig controls what data is captured during LLM tracing.
 type CaptureConfig struct {
 	Requests  bool `yaml:"requests"`
 	Responses bool `yaml:"responses"`
@@ -69,6 +73,7 @@ type CaptureConfig struct {
 	Latency   bool `yaml:"latency"`
 }
 
+// EvalsConfig defines settings for running evaluations.
 type EvalsConfig struct {
 	Path       string   `yaml:"path"`
 	Types      []string `yaml:"types"`
@@ -76,12 +81,14 @@ type EvalsConfig struct {
 	Concurrent int      `yaml:"concurrent"`
 }
 
+// GateConfig defines quality gate thresholds for CI/CD integration.
 type GateConfig struct {
 	Enabled   bool    `yaml:"enabled"`
 	Threshold float64 `yaml:"threshold"`
 	FailOn    string  `yaml:"fail_on"`
 }
 
+// OutputConfig controls the format and verbosity of command output.
 type OutputConfig struct {
 	Format  string `yaml:"format"`
 	Verbose bool   `yaml:"verbose"`

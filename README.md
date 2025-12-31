@@ -1,177 +1,250 @@
-# Regrada CLI
+# Regrada
 
-A powerful command-line tool for managing regrada workflows.
+**CI for AI systems** — Detect behavioral regressions in LLM-powered apps before they hit production.
+
+Regrada is a testing and continuous integration tool designed specifically for AI/LLM applications. It captures LLM interactions, runs evaluations against test cases, and detects when your AI's behavior changes between commits.
 
 ## Installation
 
 ### From Source
 
 ```bash
-# Clone the repository
-git clone <repository-url>
+git clone https://github.com/matiasmolinolo/regrada.git
 cd regrada
-
-# Download dependencies
-make deps
-
-# Build the binary
-make build
-
-# Install to GOPATH (optional)
-make install
+go build -o regrada .
 ```
 
-## Usage
-
-The Regrada CLI provides four main commands:
-
-### 1. Init - Initialize a Project
+### Go Install
 
 ```bash
-# Initialize in current directory
+go install github.com/matiasmolinolo/regrada@latest
+```
+
+## Quick Start
+
+```bash
+# Initialize a new project
 regrada init
 
-# Initialize in specific directory
-regrada init ./my-project
+# Run evaluations
+regrada run
 
-# Force initialization
-regrada init --force
+# Run in CI mode (exits 1 on regression)
+regrada run --ci
+```
 
-# Use custom config
-regrada init --config ./custom-config.yml
+## GitHub Action
+
+Use Regrada as a GitHub Action to automatically test your AI on every PR:
+
+```yaml
+name: AI Tests
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  regrada:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: matiasmolinolo/regrada@v1
+        with:
+          tests: evals/tests.yaml
+          baseline: .regrada/baseline.json
+          fail-on-regression: true
+          comment-on-pr: true
+```
+
+### Action Inputs
+
+| Input | Description | Default |
+|-------|-------------|---------|
+| `tests` | Path to test suite file | `evals/tests.yaml` |
+| `baseline` | Path to baseline file | `.regrada/baseline.json` |
+| `fail-on-regression` | Fail if regressions detected | `true` |
+| `fail-on-failure` | Fail if any test fails | `false` |
+| `comment-on-pr` | Post results as PR comment | `true` |
+| `working-directory` | Working directory for tests | `.` |
+
+### Action Outputs
+
+| Output | Description |
+|--------|-------------|
+| `total` | Total number of tests |
+| `passed` | Number of passed tests |
+| `failed` | Number of failed tests |
+| `regressions` | Number of regressions |
+| `result` | Overall result: `success`, `failure`, or `regression` |
+
+## Commands
+
+### `regrada init`
+
+Initialize a new Regrada project with interactive prompts:
+
+```bash
+regrada init [path]
+```
+
+Creates:
+- `.regrada.yaml` - Configuration file
+- `evals/tests.yaml` - Test suite
+- `evals/prompts/` - Prompt templates
+- `.regrada/baseline.json` - Initial baseline
+
+### `regrada run`
+
+Run evaluations against your test suite:
+
+```bash
+regrada run [flags]
 ```
 
 **Flags:**
-- `-f, --force`: Force initialization even if project exists
-- `-c, --config`: Specify a custom config file
+- `-t, --tests` - Path to test suite (default: `evals/tests.yaml`)
+- `-b, --baseline` - Path to baseline (default: `.regrada/baseline.json`)
+- `-c, --config` - Path to config (default: `.regrada.yaml`)
+- `-o, --output` - Output format: `text`, `json`, `github`
+- `--ci` - CI mode: exit 1 on regression
 
-### 2. Trace - Trace Execution
+### `regrada trace`
+
+Capture LLM calls from your application:
 
 ```bash
-# Basic trace
-regrada trace
-
-# Trace specific target
-regrada trace my-function
-
-# Trace with filter
-regrada trace --filter "error"
-
-# Trace with custom depth
-regrada trace --depth 20
-
-# Output as JSON
-regrada trace --output json
+regrada trace -- your-command [args]
 ```
+
+Automatically detects and captures calls to:
+- OpenAI
+- Anthropic
+- Azure OpenAI
+- Google AI (Gemini)
+- Cohere
+- Custom endpoints
 
 **Flags:**
-- `-f, --filter`: Filter traces by pattern
-- `-d, --depth`: Maximum trace depth (default: 10)
-- `-o, --output`: Output format (text, json, csv)
+- `-o, --output` - Output file (default: `.regrada/traces.json`)
+- `-f, --format` - Output format: `json`, `yaml`
 
-### 3. Diff - Compare and Show Differences
+## Configuration
 
-```bash
-# Compare two files
-regrada diff file1.txt file2.txt
+`.regrada.yaml`:
 
-# Compare with custom context
-regrada diff file1.txt file2.txt --context 5
+```yaml
+provider:
+  type: openai           # openai, anthropic, azure, google, cohere, custom
+  model: gpt-4
+  api_key_env: OPENAI_API_KEY
 
-# Use unified format
-regrada diff file1.txt file2.txt --unified
+capture:
+  inputs: true           # Capture prompts
+  outputs: true          # Capture responses
+  tool_calls: true       # Capture tool/function calls
+  metadata: true         # Capture tokens, latency, etc.
 
-# Ignore whitespace changes
-regrada diff file1.txt file2.txt --ignore-whitespace
+evals:
+  path: evals            # Directory for test files
+  parallel: 4            # Concurrent test execution
+
+gate:
+  max_regressions: 0     # Block PR if exceeded
+  min_pass_rate: 0.95    # Minimum pass rate (0-1)
+
+output:
+  format: text           # text, json, github
+  verbose: false
 ```
 
-**Flags:**
-- `-c, --context`: Number of context lines (default: 3)
-- `-u, --unified`: Use unified diff format
-- `-w, --ignore-whitespace`: Ignore whitespace changes
+## Writing Tests
 
-### 4. Gate - Manage Gates
+Tests are defined in YAML with prompts and checks:
 
-```bash
-# Show gate status
-regrada gate status
+```yaml
+name: Customer Support Agent Tests
+description: Evaluate support agent responses
 
-# List all gates
-regrada gate list
+tests:
+  - name: refund_request
+    prompt: |
+      Customer: I want a refund for order #12345
+    checks:
+      - schema_valid
+      - "tool_called:refund.lookup"
+      - "sentiment:empathetic"
+      - no_hallucination
 
-# Enable a gate
-regrada gate enable --name my-feature
-
-# Disable a gate
-regrada gate disable --name my-feature
-
-# Apply to all gates
-regrada gate enable --all
+  - name: product_question
+    prompt: prompts/product_question.txt
+    checks:
+      - grounded_in_retrieval
+      - stays_on_topic
+      - "length:<500"
 ```
 
-**Flags:**
-- `-n, --name`: Gate name
-- `-a, --all`: Apply to all gates
+### Available Checks
 
-## Global Flags
+| Check | Description |
+|-------|-------------|
+| `schema_valid` | Response matches expected schema |
+| `tool_called:name` | Specific tool was invoked |
+| `no_tool_called` | No tools were called |
+| `grounded_in_retrieval` | Response uses retrieved context |
+| `no_hallucination` | No fabricated information |
+| `stays_on_topic` | Response is relevant to prompt |
+| `sentiment:type` | Response has expected sentiment |
+| `tone:type` | Response has expected tone |
+| `length:<N` | Response under N characters |
+| `response_time:<Nms` | Response within time limit |
 
-All commands support the following global flag:
-- `-v, --verbose`: Enable verbose output
+## Baselines
 
-## Development
-
-### Build
+Baselines capture your AI's expected behavior. Regrada compares current results against the baseline to detect regressions.
 
 ```bash
-make build
+# Create initial baseline
+regrada run --output json > .regrada/baseline.json
+
+# Update baseline after intentional changes
+regrada run --output json > .regrada/baseline.json
+git add .regrada/baseline.json
+git commit -m "Update AI baseline"
 ```
 
-### Run Tests
+## CI Integration
+
+### GitHub Actions
+
+The recommended approach. See [GitHub Action](#github-action) above.
+
+### Other CI Systems
 
 ```bash
-make test
-```
+# Run with CI mode
+regrada run --ci --output json
 
-### Format Code
-
-```bash
-make fmt
-```
-
-### Run Linters
-
-```bash
-make lint
-```
-
-### Clean Build Artifacts
-
-```bash
-make clean
-```
-
-### Run All Tasks
-
-```bash
-make all
+# Check exit code
+# 0 = all tests pass, no regressions
+# 1 = failures or regressions detected
 ```
 
 ## Project Structure
 
 ```
-regrada/
-├── cmd/              # Command implementations
-│   ├── root.go      # Root command and CLI setup
-│   ├── init.go      # Init command
-│   ├── trace.go     # Trace command
-│   ├── diff.go      # Diff command
-│   └── gate.go      # Gate command
-├── main.go          # Entry point
-├── go.mod           # Go module file
-├── Makefile         # Build automation
-└── README.md        # This file
+your-project/
+├── .regrada.yaml           # Configuration
+├── .regrada/
+│   ├── baseline.json       # Baseline results
+│   └── results.json        # Latest results
+└── evals/
+    ├── tests.yaml          # Test definitions
+    └── prompts/            # Prompt templates
+        ├── refund.txt
+        └── greeting.txt
 ```
 
 ## License
 
-[Your License Here]
+MIT License - see [LICENSE](LICENSE) for details.
