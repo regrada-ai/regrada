@@ -1,0 +1,14 @@
+name: Example Test Suite
+description: Sample tests for your AI application
+
+tests:
+  - name: test_basic_response
+    prompt: prompts/basic.txt
+    checks:
+      - schema_valid: evals/schemas/response.json
+      - tool_called: get_weather
+
+  - name: test_no_hallucination
+    prompt: prompts/factual.txt
+    checks:
+      - no_tool_called

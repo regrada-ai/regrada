@@ -9,15 +9,7 @@ Regrada is a testing and continuous integration tool designed specifically for A
 ### From Source
 
 ```bash
-git clone https://github.com/matiasmolinolo/regrada.git
-cd regrada
-go build -o regrada .
-```
-
-### Go Install
-
-```bash
-go install github.com/matiasmolinolo/regrada@latest
+curl -fsSL https://regrada.com/install.sh | sh
 ```
 
 ## Quick Start
@@ -49,7 +41,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: matiasmolinolo/regrada@v1
+      - uses: regrada-ai/regrada@v1
         with:
           tests: evals/tests.yaml
           baseline: .regrada/baseline.json
@@ -59,24 +51,24 @@ jobs:
 
 ### Action Inputs
 
-| Input | Description | Default |
-|-------|-------------|---------|
-| `tests` | Path to test suite file | `evals/tests.yaml` |
-| `baseline` | Path to baseline file | `.regrada/baseline.json` |
-| `fail-on-regression` | Fail if regressions detected | `true` |
-| `fail-on-failure` | Fail if any test fails | `false` |
-| `comment-on-pr` | Post results as PR comment | `true` |
-| `working-directory` | Working directory for tests | `.` |
+| Input                | Description                  | Default                  |
+| -------------------- | ---------------------------- | ------------------------ |
+| `tests`              | Path to test suite file      | `evals/tests.yaml`       |
+| `baseline`           | Path to baseline file        | `.regrada/baseline.json` |
+| `fail-on-regression` | Fail if regressions detected | `true`                   |
+| `fail-on-failure`    | Fail if any test fails       | `false`                  |
+| `comment-on-pr`      | Post results as PR comment   | `true`                   |
+| `working-directory`  | Working directory for tests  | `.`                      |
 
 ### Action Outputs
 
-| Output | Description |
-|--------|-------------|
-| `total` | Total number of tests |
-| `passed` | Number of passed tests |
-| `failed` | Number of failed tests |
-| `regressions` | Number of regressions |
-| `result` | Overall result: `success`, `failure`, or `regression` |
+| Output        | Description                                           |
+| ------------- | ----------------------------------------------------- |
+| `total`       | Total number of tests                                 |
+| `passed`      | Number of passed tests                                |
+| `failed`      | Number of failed tests                                |
+| `regressions` | Number of regressions                                 |
+| `result`      | Overall result: `success`, `failure`, or `regression` |
 
 ## Commands
 
@@ -89,6 +81,7 @@ regrada init [path]
 ```
 
 Creates:
+
 - `.regrada.yaml` - Configuration file
 - `evals/tests.yaml` - Test suite
 - `evals/prompts/` - Prompt templates
@@ -103,6 +96,7 @@ regrada run [flags]
 ```
 
 **Flags:**
+
 - `-t, --tests` - Path to test suite (default: `evals/tests.yaml`)
 - `-b, --baseline` - Path to baseline (default: `.regrada/baseline.json`)
 - `-c, --config` - Path to config (default: `.regrada.yaml`)
@@ -118,6 +112,7 @@ regrada trace -- your-command [args]
 ```
 
 Automatically detects and captures calls to:
+
 - OpenAI
 - Anthropic
 - Azure OpenAI
@@ -126,6 +121,7 @@ Automatically detects and captures calls to:
 - Custom endpoints
 
 **Flags:**
+
 - `-o, --output` - Output file (default: `.regrada/traces.json`)
 - `-f, --format` - Output format: `json`, `yaml`
 
@@ -135,26 +131,26 @@ Automatically detects and captures calls to:
 
 ```yaml
 provider:
-  type: openai           # openai, anthropic, azure, google, cohere, custom
+  type: openai # openai, anthropic, azure, google, cohere, custom
   model: gpt-4
   api_key_env: OPENAI_API_KEY
 
 capture:
-  inputs: true           # Capture prompts
-  outputs: true          # Capture responses
-  tool_calls: true       # Capture tool/function calls
-  metadata: true         # Capture tokens, latency, etc.
+  inputs: true # Capture prompts
+  outputs: true # Capture responses
+  tool_calls: true # Capture tool/function calls
+  metadata: true # Capture tokens, latency, etc.
 
 evals:
-  path: evals            # Directory for test files
-  parallel: 4            # Concurrent test execution
+  path: evals # Directory for test files
+  parallel: 4 # Concurrent test execution
 
 gate:
-  max_regressions: 0     # Block PR if exceeded
-  min_pass_rate: 0.95    # Minimum pass rate (0-1)
+  max_regressions: 0 # Block PR if exceeded
+  min_pass_rate: 0.95 # Minimum pass rate (0-1)
 
 output:
-  format: text           # text, json, github
+  format: text # text, json, github
   verbose: false
 ```
 
@@ -186,18 +182,18 @@ tests:
 
 ### Available Checks
 
-| Check | Description |
-|-------|-------------|
-| `schema_valid` | Response matches expected schema |
-| `tool_called:name` | Specific tool was invoked |
-| `no_tool_called` | No tools were called |
-| `grounded_in_retrieval` | Response uses retrieved context |
-| `no_hallucination` | No fabricated information |
-| `stays_on_topic` | Response is relevant to prompt |
-| `sentiment:type` | Response has expected sentiment |
-| `tone:type` | Response has expected tone |
-| `length:<N` | Response under N characters |
-| `response_time:<Nms` | Response within time limit |
+| Check                   | Description                      |
+| ----------------------- | -------------------------------- |
+| `schema_valid`          | Response matches expected schema |
+| `tool_called:name`      | Specific tool was invoked        |
+| `no_tool_called`        | No tools were called             |
+| `grounded_in_retrieval` | Response uses retrieved context  |
+| `no_hallucination`      | No fabricated information        |
+| `stays_on_topic`        | Response is relevant to prompt   |
+| `sentiment:type`        | Response has expected sentiment  |
+| `tone:type`             | Response has expected tone       |
+| `length:<N`             | Response under N characters      |
+| `response_time:<Nms`    | Response within time limit       |
 
 ## Baselines
 
