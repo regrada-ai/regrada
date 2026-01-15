@@ -38,25 +38,25 @@ type CaptureConfig struct {
 	Latency   bool `yaml:"latency"`
 }
 
-// EvalsConfig defines settings for running evaluations (DEPRECATED - most fields unused).
+// EvalsConfig defines settings for running evaluations.
 type EvalsConfig struct {
 	Path       string   `yaml:"path"`
-	Types      []string `yaml:"types,omitempty"`       // Not used
-	Timeout    string   `yaml:"timeout,omitempty"`     // Not implemented
-	Concurrent int      `yaml:"concurrent,omitempty"`  // Not implemented
+	Types      []string `yaml:"types,omitempty"`
+	Timeout    string   `yaml:"timeout,omitempty"`
+	Concurrent int      `yaml:"concurrent,omitempty"`
 }
 
-// GateConfig defines quality gate thresholds for CI/CD integration (DEPRECATED - use --ci flag).
+// GateConfig defines quality gate thresholds for CI/CD integration.
 type GateConfig struct {
 	Enabled   bool    `yaml:"enabled"`
-	Threshold float64 `yaml:"threshold,omitempty"`  // Not used
-	FailOn    string  `yaml:"fail_on,omitempty"`    // Not used
+	Threshold float64 `yaml:"threshold,omitempty"`
+	FailOn    string  `yaml:"fail_on,omitempty"` // Options: any-failure, regression, threshold
 }
 
-// OutputConfig controls the format and verbosity of command output (DEPRECATED - use --output flag).
+// OutputConfig controls the format and verbosity of command output.
 type OutputConfig struct {
-	Format  string `yaml:"format,omitempty"`   // Not used
-	Verbose bool   `yaml:"verbose,omitempty"`  // Not used
+	Format  string `yaml:"format,omitempty"` // Options: text, json, github
+	Verbose bool   `yaml:"verbose,omitempty"`
 }
 
 // Load reads and parses a Regrada configuration file.
@@ -84,7 +84,6 @@ func Defaults(projectName string) *RegradaConfig {
 			Type:  "openai",
 			Model: "gpt-4o",
 		},
-		// Deprecated fields with default values for backward compatibility
 		Capture: CaptureConfig{
 			Requests:  true,
 			Responses: true,
@@ -92,13 +91,24 @@ func Defaults(projectName string) *RegradaConfig {
 			Latency:   true,
 		},
 		Evals: EvalsConfig{
-			Path: "evals",
+			Path:       "evals",
+			Types:      []string{"semantic", "exact", "llm-judge"},
+			Timeout:    "30s",
+			Concurrent: 5,
+		},
+		Gate: GateConfig{
+			Enabled:   true,
+			Threshold: 0.85,
+			FailOn:    "any-failure",
+		},
+		Output: OutputConfig{
+			Format:  "github",
+			Verbose: false,
 		},
 	}
 }
 
 // Validate checks that the configuration is valid and complete.
-// It also prints warnings for deprecated fields.
 func Validate(cfg *RegradaConfig) error {
 	if cfg.Version == "" {
 		return fmt.Errorf("config version is required")
@@ -121,24 +131,28 @@ func Validate(cfg *RegradaConfig) error {
 		return fmt.Errorf("invalid provider type: %s (must be one of: openai, anthropic, azure-openai, custom)", cfg.Provider.Type)
 	}
 
-	// Print warnings for deprecated fields
-	if cfg.Capture.Requests || cfg.Capture.Responses || cfg.Capture.Traces || cfg.Capture.Latency {
-		fmt.Fprintf(os.Stderr, "Warning: 'capture' config is deprecated (all data is now captured by default)\n")
+	// Validate gate fail_on option
+	if cfg.Gate.FailOn != "" {
+		validFailOn := map[string]bool{
+			"any-failure": true,
+			"regression":  true,
+			"threshold":   true,
+		}
+		if !validFailOn[cfg.Gate.FailOn] {
+			fmt.Fprintf(os.Stderr, "Warning: invalid gate.fail_on value '%s' (valid options: any-failure, regression, threshold)\n", cfg.Gate.FailOn)
+		}
 	}
-	if len(cfg.Evals.Types) > 0 {
-		fmt.Fprintf(os.Stderr, "Warning: 'evals.types' config is deprecated and ignored\n")
-	}
-	if cfg.Evals.Timeout != "" {
-		fmt.Fprintf(os.Stderr, "Warning: 'evals.timeout' config is deprecated and ignored\n")
-	}
-	if cfg.Evals.Concurrent > 0 {
-		fmt.Fprintf(os.Stderr, "Warning: 'evals.concurrent' config is deprecated and ignored\n")
-	}
-	if cfg.Gate.Enabled {
-		fmt.Fprintf(os.Stderr, "Warning: 'gate' config is deprecated, use --ci flag instead\n")
-	}
-	if cfg.Output.Format != "" || cfg.Output.Verbose {
-		fmt.Fprintf(os.Stderr, "Warning: 'output' config is deprecated, use --output flag instead\n")
+
+	// Validate output format
+	if cfg.Output.Format != "" {
+		validFormats := map[string]bool{
+			"text":   true,
+			"json":   true,
+			"github": true,
+		}
+		if !validFormats[cfg.Output.Format] {
+			fmt.Fprintf(os.Stderr, "Warning: invalid output.format value '%s' (valid options: text, json, github)\n", cfg.Output.Format)
+		}
 	}
 
 	return nil

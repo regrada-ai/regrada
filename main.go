@@ -178,6 +178,12 @@ func runInteractiveSetup() *config.RegradaConfig {
 	var model string
 	var baseURL string
 	var captureOptions []string
+	var evalTypes []string
+	var gateEnabled bool
+	var gateThreshold string
+	var gateFailOn string
+	var outputFormat string
+	var outputVerbose bool
 
 	form := huh.NewForm(
 		huh.NewGroup(
@@ -229,6 +235,65 @@ func runInteractiveSetup() *config.RegradaConfig {
 				Value(&captureOptions).
 				Limit(4),
 		),
+
+		huh.NewGroup(
+			huh.NewMultiSelect[string]().
+				Title("Evaluation Types").
+				Description("Select evaluation methods to use").
+				Options(
+					huh.NewOption("Semantic", "semantic"),
+					huh.NewOption("Exact", "exact"),
+					huh.NewOption("LLM Judge", "llm-judge"),
+				).
+				Value(&evalTypes).
+				Limit(3),
+		),
+
+		huh.NewGroup(
+			huh.NewConfirm().
+				Title("Enable Quality Gate?").
+				Description("Automatically fail CI/CD if tests don't meet quality thresholds").
+				Value(&gateEnabled).
+				Affirmative("Yes").
+				Negative("No"),
+		),
+
+		huh.NewGroup(
+			huh.NewInput().
+				Title("Quality Threshold").
+				Description("Minimum pass rate (0.0-1.0, e.g., 0.85 for 85%)").
+				Value(&gateThreshold).
+				Placeholder("0.85"),
+
+			huh.NewSelect[string]().
+				Title("Fail On").
+				Description("When to fail the quality gate").
+				Options(
+					huh.NewOption("Any Failure", "any-failure"),
+					huh.NewOption("Regression Only", "regression"),
+					huh.NewOption("Below Threshold", "threshold"),
+				).
+				Value(&gateFailOn),
+		),
+
+		huh.NewGroup(
+			huh.NewSelect[string]().
+				Title("Output Format").
+				Description("Default output format for results").
+				Options(
+					huh.NewOption("Text", "text"),
+					huh.NewOption("JSON", "json"),
+					huh.NewOption("GitHub", "github"),
+				).
+				Value(&outputFormat),
+
+			huh.NewConfirm().
+				Title("Verbose Output?").
+				Description("Show detailed information during execution").
+				Value(&outputVerbose).
+				Affirmative("Yes").
+				Negative("No"),
+		),
 	).WithTheme(huh.ThemeCharm())
 
 	if err := form.Run(); err != nil {
@@ -259,7 +324,7 @@ func runInteractiveSetup() *config.RegradaConfig {
 		projectName = defaultProject
 	}
 	if model == "" {
-		model = "gpt-5.1"
+		model = "gpt-4o"
 	}
 
 	cfg.Project = projectName
@@ -281,6 +346,29 @@ func runInteractiveSetup() *config.RegradaConfig {
 		cfg.Capture.Traces = true
 		cfg.Capture.Latency = true
 	}
+
+	// Set evaluation types
+	if len(evalTypes) > 0 {
+		cfg.Evals.Types = evalTypes
+	}
+
+	// Set quality gate configuration
+	cfg.Gate.Enabled = gateEnabled
+	if gateThreshold != "" {
+		// Parse threshold string to float
+		var threshold float64
+		fmt.Sscanf(gateThreshold, "%f", &threshold)
+		cfg.Gate.Threshold = threshold
+	}
+	if gateFailOn != "" {
+		cfg.Gate.FailOn = gateFailOn
+	}
+
+	// Set output configuration
+	if outputFormat != "" {
+		cfg.Output.Format = outputFormat
+	}
+	cfg.Output.Verbose = outputVerbose
 
 	return cfg
 }
