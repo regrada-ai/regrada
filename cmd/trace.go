@@ -77,7 +77,10 @@ func runTrace(cmd *cobra.Command, args []string) {
 	}
 
 	traceDir := filepath.Join(".regrada", "traces")
-	os.MkdirAll(traceDir, 0755)
+	if err := os.MkdirAll(traceDir, 0755); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: failed to create trace directory %s: %v\n", traceDir, err)
+		os.Exit(1)
+	}
 
 	var session *trace.TraceSession
 
