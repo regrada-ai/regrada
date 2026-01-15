@@ -71,21 +71,21 @@ type TraceSummary struct {
 
 // Comparison represents the difference between a current session and a baseline.
 type Comparison struct {
-	CallCountChanged bool
-	BaselineCount    int
-	CurrentCount     int
-	NewTools         []string
-	RemovedTools     []string
-	ModelChanges     map[string]ModelChange
-	TokenDiff        int
+	CallCountChanged bool                       `json:"CallCountChanged"`
+	BaselineCount    int                        `json:"BaselineCount"`
+	CurrentCount     int                        `json:"CurrentCount"`
+	NewTools         []string                   `json:"NewTools"`
+	RemovedTools     []string                   `json:"RemovedTools"`
+	ModelChanges     map[string]ModelChange     `json:"ModelChanges"`
+	TokenDiff        int                        `json:"TokenDiff"`
 }
 
 // ModelChange represents a change in model usage.
 type ModelChange struct {
-	Model         string
-	BaselineCount int
-	CurrentCount  int
-	IsNew         bool
+	Model         string `json:"Model"`
+	BaselineCount int    `json:"BaselineCount"`
+	CurrentCount  int    `json:"CurrentCount"`
+	IsNew         bool   `json:"IsNew"`
 }
 
 // Save writes a trace session to a file in JSON format.
