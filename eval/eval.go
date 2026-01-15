@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/matias/regrada/trace"
@@ -20,9 +21,78 @@ type TestSuite struct {
 
 // TestCase represents a single test.
 type TestCase struct {
-	Name   string   `yaml:"name"`
-	Prompt string   `yaml:"prompt"`
-	Checks []string `yaml:"checks"`
+	Name        string  `yaml:"name"`
+	Description string  `yaml:"description,omitempty"`
+	TraceIndex  int     `yaml:"trace_index"`
+	TraceID     string  `yaml:"trace_id,omitempty"`
+	Checks      []Check `yaml:"checks"`
+}
+
+
+// Check represents a single check that can be unmarshaled from either string or map format.
+type Check struct {
+	Raw string // Stores the check in "type:param" format for RunCheck
+}
+
+// UnmarshalYAML implements custom YAML unmarshaling for Check.
+// Supports both formats:
+//   - String: "tool_called:get_weather"
+//   - Map: {tool_called: "get_weather"} or {contains: "text"}
+func (c *Check) UnmarshalYAML(value *yaml.Node) error {
+	// Try unmarshaling as string first (old format)
+	var str string
+	if err := value.Decode(&str); err == nil {
+		c.Raw = str
+		return nil
+	}
+
+	// Try unmarshaling as map (new format)
+	var m map[string]interface{}
+	if err := value.Decode(&m); err != nil {
+		return fmt.Errorf("check must be either a string or a map")
+	}
+
+	// Convert map to "type:param" format
+	if len(m) != 1 {
+		return fmt.Errorf("check map must have exactly one key")
+	}
+
+	for checkType, checkValue := range m {
+		// Handle different value types
+		switch v := checkValue.(type) {
+		case string:
+			c.Raw = checkType + ":" + v
+		case map[string]interface{}:
+			// For tool_args_contains, marshal the map as JSON
+			jsonBytes, err := json.Marshal(v)
+			if err != nil {
+				return fmt.Errorf("failed to marshal check arguments: %w", err)
+			}
+			c.Raw = checkType + ":" + string(jsonBytes)
+		case []interface{}:
+			// For contains_any with array format
+			jsonBytes, err := json.Marshal(v)
+			if err != nil {
+				return fmt.Errorf("failed to marshal check arguments: %w", err)
+			}
+			c.Raw = checkType + ":" + string(jsonBytes)
+		case int, int64, float64:
+			c.Raw = fmt.Sprintf("%s:%v", checkType, v)
+		case nil:
+			// Handle checks like "no_tool_called" with no value
+			c.Raw = checkType
+		default:
+			return fmt.Errorf("unsupported check value type: %T", v)
+		}
+	}
+
+	return nil
+}
+
+// MarshalYAML implements custom YAML marshaling for Check.
+// Outputs the check as a plain string in "type:param" format.
+func (c Check) MarshalYAML() (interface{}, error) {
+	return c.Raw, nil
 }
 
 // EvalResult represents the result of running evaluations.
@@ -91,7 +161,7 @@ func RunTest(test TestCase, tr *trace.LLMTrace) TestResult {
 
 	// Run each check against the trace
 	for _, check := range test.Checks {
-		checkResult := RunCheck(check, tr)
+		checkResult := RunCheck(check.Raw, tr)
 		result.CheckResults = append(result.CheckResults, checkResult)
 
 		if !checkResult.Passed {
@@ -104,8 +174,8 @@ func RunTest(test TestCase, tr *trace.LLMTrace) TestResult {
 	return result
 }
 
-// LoadLatestTrace loads the most recent trace from the traces directory.
-func LoadLatestTrace() (*trace.LLMTrace, error) {
+// LoadLatestSession loads the most recent trace session from the traces directory.
+func LoadLatestSession() (*trace.TraceSession, error) {
 	traceDir := filepath.Join(".regrada", "traces")
 
 	// Find the most recent trace file
@@ -143,13 +213,31 @@ func LoadLatestTrace() (*trace.LLMTrace, error) {
 		return nil, fmt.Errorf("failed to parse trace file: %w", err)
 	}
 
-	// For now, return the first trace in the session
-	// TODO: Match traces to tests based on test metadata
 	if len(session.Traces) == 0 {
 		return nil, fmt.Errorf("no traces found in session")
 	}
 
-	return &session.Traces[0], nil
+	return &session, nil
+}
+
+// GetTraceForTest retrieves the appropriate trace for a test case from a session.
+func GetTraceForTest(test TestCase, session *trace.TraceSession) (*trace.LLMTrace, error) {
+	// If TraceID is specified, search for matching trace
+	if test.TraceID != "" {
+		for i := range session.Traces {
+			if session.Traces[i].ID == test.TraceID {
+				return &session.Traces[i], nil
+			}
+		}
+		return nil, fmt.Errorf("trace with ID %s not found in session", test.TraceID)
+	}
+
+	// Otherwise use TraceIndex
+	if test.TraceIndex < 0 || test.TraceIndex >= len(session.Traces) {
+		return nil, fmt.Errorf("trace_index %d out of range (session has %d traces)", test.TraceIndex, len(session.Traces))
+	}
+
+	return &session.Traces[test.TraceIndex], nil
 }
 
 // CompareWithBaseline compares current results with a baseline file.
@@ -227,4 +315,64 @@ func SaveResults(result *EvalResult, path string) error {
 	}
 
 	return os.WriteFile(path, data, 0644)
+}
+
+// SaveSuite writes a test suite to a YAML file.
+func SaveSuite(suite *TestSuite, path string) error {
+	// Ensure directory exists
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
+	}
+
+	data, err := yaml.Marshal(suite)
+	if err != nil {
+		return fmt.Errorf("failed to marshal test suite: %w", err)
+	}
+
+	return os.WriteFile(path, data, 0644)
+}
+
+// GenerateTestStubs creates test cases from a trace session.
+func GenerateTestStubs(session *trace.TraceSession) *TestSuite {
+	suite := &TestSuite{
+		Name:        fmt.Sprintf("Test Suite - %s", session.ID),
+		Description: fmt.Sprintf("Auto-generated from trace session on %s", session.StartTime.Format(time.RFC3339)),
+		Tests:       make([]TestCase, 0, len(session.Traces)),
+	}
+
+	for i, tr := range session.Traces {
+		testName := generateTestName(i, &tr)
+		test := TestCase{
+			Name:        testName,
+			TraceIndex:  i,
+			Description: "",
+			Checks:      []Check{},
+		}
+		suite.Tests = append(suite.Tests, test)
+	}
+
+	return suite
+}
+
+// generateTestName creates a descriptive name for a test based on its trace.
+func generateTestName(index int, tr *trace.LLMTrace) string {
+	// Extract meaningful parts from the trace
+	provider := tr.Provider
+	if provider == "" {
+		provider = "unknown"
+	}
+
+	// Extract the last part of the endpoint (e.g., "chat/completions" from "/v1/chat/completions")
+	endpoint := tr.Endpoint
+	if endpoint != "" {
+		parts := strings.Split(endpoint, "/")
+		if len(parts) > 0 {
+			endpoint = parts[len(parts)-1]
+		}
+	} else {
+		endpoint = "api_call"
+	}
+
+	return fmt.Sprintf("trace_%d_%s_%s", index+1, provider, endpoint)
 }
