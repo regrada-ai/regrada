@@ -65,8 +65,14 @@ func runInit(cmd *cobra.Command, args []string) {
 		os.Exit(1)
 	}
 
-	os.MkdirAll(".regrada/traces", 0755)
-	os.MkdirAll("evals/schemas", 0755)
+	if err := os.MkdirAll(".regrada/traces", 0755); err != nil {
+		fmt.Printf("%s Failed to create directory %s: %v\n", warnStyle.Render("Error:"), ".regrada/traces", err)
+		os.Exit(1)
+	}
+	if err := os.MkdirAll("evals/schemas", 0755); err != nil {
+		fmt.Printf("%s Failed to create directory %s: %v\n", warnStyle.Render("Error:"), "evals/schemas", err)
+		os.Exit(1)
+	}
 
 	createExampleEval()
 
