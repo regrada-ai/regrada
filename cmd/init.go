@@ -311,6 +311,12 @@ tests:
   }
 }`
 
-	os.WriteFile("evals/tests.yaml", []byte(exampleTests), 0644)
-	os.WriteFile("evals/schemas/response.json", []byte(exampleSchema), 0644)
+	if err := os.WriteFile("evals/tests.yaml", []byte(exampleTests), 0644); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to write example tests file: %v\n", err)
+		return
+	}
+	if err := os.WriteFile("evals/schemas/response.json", []byte(exampleSchema), 0644); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to write example schema file: %v\n", err)
+		return
+	}
 }
