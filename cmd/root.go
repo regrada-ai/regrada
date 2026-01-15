@@ -7,36 +7,29 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const version = "0.1.0"
+
 var rootCmd = &cobra.Command{
 	Use:   "regrada",
-	Short: "Regrada - CI for AI systems",
-	Long: `Regrada is a CI tool for AI systems that detects behavioral
-regressions in LLM-powered apps before they hit production.
+	Short: "Regrada - CI/CD for AI applications",
+	Long: `Regrada helps you trace LLM calls and run evaluations to catch regressions.
 
-Available commands:
-  init  - Initialize a new regrada project
-  trace - Run evaluations and capture traces
-  diff  - Compare evaluation results
-  gate  - Manage quality gates`,
-	Run: func(cmd *cobra.Command, args []string) {
-		if len(args) == 0 {
-			cmd.Help()
-			return
-		}
-	},
+Key commands:
+  regrada init                   Initialize new project with interactive setup
+  regrada trace -- <command>     Trace LLM API calls from command
+  regrada run [options]          Run evaluations and detect regressions
+  regrada version                Show version information`,
+	Version:      version,
+	SilenceUsage: true,
 }
 
-// Execute runs the root command
-func Execute() error {
-	return rootCmd.Execute()
+func Execute() {
+	if err := rootCmd.Execute(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 }
 
 func init() {
-	rootCmd.PersistentFlags().BoolP("verbose", "v", false, "Enable verbose output")
-}
-
-// exitWithError prints an error message and exits
-func exitWithError(err error) {
-	fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-	os.Exit(1)
+	// Global flags can be added here if needed
 }
