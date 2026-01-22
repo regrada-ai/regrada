@@ -1,0 +1,78 @@
+version: 1
+project:
+  name: regrada
+cases:
+  roots:
+    - regrada/cases
+  include:
+    - "**/*.yml"
+    - "**/*.yaml"
+  exclude:
+    - "**/README.*"
+  defaults:
+    runs: 3
+    timeout_ms: 30000
+    concurrency: 8
+    sampling:
+      temperature: 0.2
+      top_p: 1.0
+capture:
+  enabled: true
+  mode: proxy
+  proxy:
+    listen: "127.0.0.1:4141"
+    upstream:
+      openai_base_url: "https://api.openai.com"
+  redact:
+    enabled: true
+    presets:
+      - pii_basic
+      - secrets
+providers:
+  default: mock
+  openai:
+    api_key_env: "OPENAI_API_KEY"
+    base_url_env: "OPENAI_BASE_URL"
+    model: ""
+  anthropic:
+    api_key_env: "ANTHROPIC_API_KEY"
+    base_url_env: "ANTHROPIC_BASE_URL"
+    model: ""
+baseline:
+  mode: git
+  git:
+    ref: "origin/main"
+    snapshot_dir: ".regrada/snapshots"
+  local:
+    snapshot_dir: ".regrada/snapshots"
+policies:
+  - id: no_pii
+    severity: error
+    check:
+      type: pii_leak
+      detector: pii_basic
+      max_incidents: 0
+report:
+  format:
+    - summary
+    - markdown
+  markdown:
+    path: ".regrada/report.md"
+  junit:
+    path: ".regrada/junit.xml"
+  store_artifacts: true
+ci:
+  fail_on:
+    - severity: error
+  comment_on_pr: true
+record:
+  session_dir: ".regrada/sessions"
+  traces_dir: ".regrada/traces"
+  accept:
+    output_dir: "regrada/cases/recorded"
+    default_tags:
+      - recorded
+    infer_asserts: true
+    normalize:
+      trim_whitespace: true
+      drop_volatile_fields: true

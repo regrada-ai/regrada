@@ -4,325 +4,133 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
-	"github.com/charmbracelet/huh"
-	"github.com/charmbracelet/lipgloss"
-	"github.com/matias/regrada/config"
+	"github.com/matias/regrada/internal/cases"
+	"github.com/matias/regrada/internal/config"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )
 
 var (
-	initForce       bool
-	initUseDefaults bool
+	initForce bool
+	initPath  string
 )
 
 var initCmd = &cobra.Command{
 	Use:   "init",
-	Short: "Initialize new project with interactive setup",
-	Long:  `Initialize a new Regrada project with interactive configuration or use defaults.`,
-	Run:   runInit,
+	Short: "Initialize a project with regrada.yml and an example case",
+	RunE:  runInit,
 }
 
 func init() {
 	rootCmd.AddCommand(initCmd)
 
-	initCmd.Flags().BoolVarP(&initForce, "force", "f", false, "Force initialization even if project exists")
-	initCmd.Flags().BoolVarP(&initUseDefaults, "yes", "y", false, "Use default values without interactive prompts")
+	initCmd.Flags().BoolVarP(&initForce, "force", "f", false, "Overwrite existing config")
+	initCmd.Flags().StringVar(&initPath, "path", "regrada.yml", "Path for the project config")
 }
 
-func runInit(cmd *cobra.Command, args []string) {
-	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("212"))
-	successStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
-	warnStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("214"))
-	dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
-
-	fmt.Println()
-	fmt.Println(titleStyle.Render("Regrada Initialize"))
-	fmt.Println(dimStyle.Render("Setting up your AI testing environment..."))
-	fmt.Println()
-
-	if _, err := os.Stat(".regrada.yaml"); err == nil && !initForce {
-		fmt.Printf("%s Project already initialized. Use --force to reinitialize.\n", warnStyle.Render("Warning:"))
-		os.Exit(1)
+func runInit(cmd *cobra.Command, args []string) error {
+	if initPath == "" {
+		initPath = "regrada.yml"
 	}
 
-	var cfg *config.RegradaConfig
-	if initUseDefaults {
-		cfg = config.Defaults(".")
-	} else {
-		cfg = runInteractiveSetup()
+	if _, err := os.Stat(initPath); err == nil && !initForce {
+		return fmt.Errorf("config already exists at %s (use --force to overwrite)", initPath)
 	}
+
+	projectName := filepath.Base(mustGetwd())
+	cfg := config.DefaultConfig(projectName)
 
 	data, err := yaml.Marshal(cfg)
 	if err != nil {
-		fmt.Printf("%s Failed to serialize config: %v\n", warnStyle.Render("Error:"), err)
-		os.Exit(1)
+		return fmt.Errorf("marshal config: %w", err)
 	}
 
-	if err := os.WriteFile(".regrada.yaml", data, 0644); err != nil {
-		fmt.Printf("%s Failed to write config: %v\n", warnStyle.Render("Error:"), err)
-		os.Exit(1)
+	if err := os.WriteFile(initPath, data, 0644); err != nil {
+		return fmt.Errorf("write config: %w", err)
 	}
 
-	if err := os.MkdirAll(".regrada/traces", 0755); err != nil {
-		fmt.Printf("%s Failed to create directory %s: %v\n", warnStyle.Render("Error:"), ".regrada/traces", err)
-		os.Exit(1)
+	dirs := []string{
+		"regrada/cases",
+		".regrada",
+		".regrada/snapshots",
+		".regrada/traces",
+		".regrada/sessions",
 	}
-	if err := os.MkdirAll("evals/schemas", 0755); err != nil {
-		fmt.Printf("%s Failed to create directory %s: %v\n", warnStyle.Render("Error:"), "evals/schemas", err)
-		os.Exit(1)
-	}
-
-	createExampleEval()
-
-	fmt.Println()
-	fmt.Println(successStyle.Render("✓ Project initialized successfully!"))
-	fmt.Println()
-	fmt.Println("Next steps:")
-	fmt.Println("  1. Run your app:", dimStyle.Render("regrada trace --save-baseline -- <your-command>"))
-	fmt.Println("  2. Edit generated tests in evals/tests.yaml to add checks")
-	fmt.Println("  3. Validate:", dimStyle.Render("regrada run"))
-	fmt.Println()
-}
-
-func runInteractiveSetup() *config.RegradaConfig {
-	cfg := config.Defaults(".")
-
-	cwd, _ := os.Getwd()
-	defaultProject := filepath.Base(cwd)
-
-	var projectName string
-	var env string
-	var providerType string
-	var model string
-	var baseURL string
-	var captureOptions []string
-	var evalTypes []string
-	var gateEnabled bool
-	var gateThreshold string
-	var gateFailOn string
-	var outputFormat string
-	var outputVerbose bool
-
-	form := huh.NewForm(
-		huh.NewGroup(
-			huh.NewInput().
-				Title("Project Name").
-				Value(&projectName).
-				Placeholder(defaultProject),
-
-			huh.NewSelect[string]().
-				Title("Environment").
-				Options(
-					huh.NewOption("Local Development", "local"),
-					huh.NewOption("Staging", "staging"),
-					huh.NewOption("Production", "production"),
-				).
-				Value(&env),
-		),
-
-		huh.NewGroup(
-			huh.NewSelect[string]().
-				Title("LLM Provider").
-				Options(
-					huh.NewOption("OpenAI", "openai"),
-					huh.NewOption("Anthropic (Claude)", "anthropic"),
-					huh.NewOption("Azure OpenAI", "azure-openai"),
-					huh.NewOption("Custom/Ollama", "custom"),
-				).
-				Value(&providerType),
-		),
-
-		huh.NewGroup(
-			huh.NewInput().
-				Title("Model").
-				Description("e.g., gpt-4o, claude-3-5-sonnet-20241022, llama2").
-				Value(&model).
-				Placeholder("gpt-4o"),
-		),
-
-		huh.NewGroup(
-			huh.NewMultiSelect[string]().
-				Title("Data to Capture").
-				Description("Select what data to capture during tracing").
-				Options(
-					huh.NewOption("Requests", "requests"),
-					huh.NewOption("Responses", "responses"),
-					huh.NewOption("Traces", "traces"),
-					huh.NewOption("Latency", "latency"),
-				).
-				Value(&captureOptions).
-				Limit(4),
-		),
-
-		huh.NewGroup(
-			huh.NewMultiSelect[string]().
-				Title("Evaluation Types").
-				Description("Select evaluation methods to use").
-				Options(
-					huh.NewOption("Semantic", "semantic"),
-					huh.NewOption("Exact", "exact"),
-					huh.NewOption("LLM Judge", "llm-judge"),
-				).
-				Value(&evalTypes).
-				Limit(3),
-		),
-
-		huh.NewGroup(
-			huh.NewConfirm().
-				Title("Enable Quality Gate?").
-				Description("Automatically fail CI/CD if tests don't meet quality thresholds").
-				Value(&gateEnabled).
-				Affirmative("Yes").
-				Negative("No"),
-		),
-
-		huh.NewGroup(
-			huh.NewInput().
-				Title("Quality Threshold").
-				Description("Minimum pass rate (0.0-1.0, e.g., 0.85 for 85%)").
-				Value(&gateThreshold).
-				Placeholder("0.85"),
-
-			huh.NewSelect[string]().
-				Title("Fail On").
-				Description("When to fail the quality gate").
-				Options(
-					huh.NewOption("Any Failure", "any-failure"),
-					huh.NewOption("Regression Only", "regression"),
-					huh.NewOption("Below Threshold", "threshold"),
-				).
-				Value(&gateFailOn),
-		),
-
-		huh.NewGroup(
-			huh.NewSelect[string]().
-				Title("Output Format").
-				Description("Default output format for results").
-				Options(
-					huh.NewOption("Text", "text"),
-					huh.NewOption("JSON", "json"),
-					huh.NewOption("GitHub", "github"),
-				).
-				Value(&outputFormat),
-
-			huh.NewConfirm().
-				Title("Verbose Output?").
-				Description("Show detailed information during execution").
-				Value(&outputVerbose).
-				Affirmative("Yes").
-				Negative("No"),
-		),
-	).WithTheme(huh.ThemeCharm())
-
-	if err := form.Run(); err != nil {
-		fmt.Printf("Error: %v\n", err)
-		os.Exit(1)
-	}
-
-	if providerType == "azure-openai" || providerType == "custom" {
-		baseURLForm := huh.NewForm(
-			huh.NewGroup(
-				huh.NewInput().
-					Title("Base URL").
-					Description("API endpoint URL").
-					Value(&baseURL).
-					Placeholder("https://your-resource.openai.azure.com"),
-			),
-		).WithTheme(huh.ThemeCharm())
-
-		if err := baseURLForm.Run(); err != nil {
-			fmt.Printf("Error: %v\n", err)
-			os.Exit(1)
+	for _, dir := range dirs {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return fmt.Errorf("create dir %s: %w", dir, err)
 		}
 	}
 
-	if projectName == "" {
-		projectName = defaultProject
-	}
-	if model == "" {
-		model = "gpt-4o"
-	}
-
-	cfg.Project = projectName
-	cfg.Env = env
-	cfg.Provider.Type = providerType
-	cfg.Provider.Model = model
-	cfg.Provider.BaseURL = baseURL
-
-	cfg.Capture.Requests = contains(captureOptions, "requests")
-	cfg.Capture.Responses = contains(captureOptions, "responses")
-	cfg.Capture.Traces = contains(captureOptions, "traces")
-	cfg.Capture.Latency = contains(captureOptions, "latency")
-
-	if len(captureOptions) == 0 {
-		cfg.Capture.Requests = true
-		cfg.Capture.Responses = true
-		cfg.Capture.Traces = true
-		cfg.Capture.Latency = true
-	}
-
-	if len(evalTypes) > 0 {
-		cfg.Evals.Types = evalTypes
-	}
-
-	cfg.Gate.Enabled = gateEnabled
-	if gateThreshold != "" {
-		var threshold float64
-		fmt.Sscanf(gateThreshold, "%f", &threshold)
-		cfg.Gate.Threshold = threshold
-	}
-	if gateFailOn != "" {
-		cfg.Gate.FailOn = gateFailOn
-	}
-
-	if outputFormat != "" {
-		cfg.Output.Format = outputFormat
-	}
-	cfg.Output.Verbose = outputVerbose
-
-	return cfg
-}
-
-func contains(slice []string, item string) bool {
-	for _, s := range slice {
-		if s == item {
-			return true
+	examplePath := filepath.Join("regrada", "cases", "example.yml")
+	if _, err := os.Stat(examplePath); os.IsNotExist(err) || initForce {
+		example := cases.ExampleCase()
+		if err := cases.WriteCase(examplePath, example); err != nil {
+			return fmt.Errorf("write example case: %w", err)
 		}
 	}
-	return false
+
+	if err := appendGitignore(".regrada/", ".regrada/report.md", ".regrada/junit.xml"); err != nil {
+		return fmt.Errorf("update .gitignore: %w", err)
+	}
+
+	fmt.Printf("Initialized Regrada in %s\n", filepath.Dir(initPath))
+	fmt.Printf("- Config: %s\n", initPath)
+	fmt.Printf("- Example case: %s\n", examplePath)
+	return nil
 }
 
-func createExampleEval() {
-	exampleTests := `name: Example Test Suite
-description: Run "regrada trace --save-baseline -- <your-command>" to auto-generate tests
-
-tests:
-  - name: example_trace
-    trace_index: 0
-    description: "Example test - will be replaced with auto-generated tests"
-    checks:
-      - "tool_called:example_tool"
-      - "contains:expected text"
-`
-
-	exampleSchema := `{
-  "type": "object",
-  "required": ["response"],
-  "properties": {
-    "response": {
-      "type": "string"
-    }
-  }
-}`
-
-	if err := os.WriteFile("evals/tests.yaml", []byte(exampleTests), 0644); err != nil {
-		fmt.Fprintf(os.Stderr, "failed to write example tests file: %v\n", err)
-		return
+func appendGitignore(entries ...string) error {
+	path := ".gitignore"
+	data, _ := os.ReadFile(path)
+	existing := string(data)
+	lines := strings.Split(existing, "\n")
+	seen := make(map[string]bool)
+	for _, line := range lines {
+		seen[strings.TrimSpace(line)] = true
 	}
-	if err := os.WriteFile("evals/schemas/response.json", []byte(exampleSchema), 0644); err != nil {
-		fmt.Fprintf(os.Stderr, "failed to write example schema file: %v\n", err)
-		return
+
+	var toAppend []string
+	for _, entry := range entries {
+		if entry == "" {
+			continue
+		}
+		if !seen[entry] {
+			toAppend = append(toAppend, entry)
+		}
 	}
+
+	if len(toAppend) == 0 {
+		return nil
+	}
+
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	if len(existing) > 0 && !strings.HasSuffix(existing, "\n") {
+		if _, err := f.WriteString("\n"); err != nil {
+			return err
+		}
+	}
+
+	for _, entry := range toAppend {
+		if _, err := f.WriteString(entry + "\n"); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func mustGetwd() string {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "."
+	}
+	return cwd
 }

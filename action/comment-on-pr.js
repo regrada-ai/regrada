@@ -1,60 +1,37 @@
-const fs = require('fs');
+const fs = require("fs");
 
 module.exports = async ({ github, context, workdir }) => {
-  const resultsPath = workdir === '.' ? '.regrada/results.json' : `${workdir}/.regrada/results.json`;
+  const reportPath =
+    workdir === "." ? ".regrada/report.md" : `${workdir}/.regrada/report.md`;
 
-  let result;
+  let report;
   try {
-    result = JSON.parse(fs.readFileSync(resultsPath, 'utf8'));
+    report = fs.readFileSync(reportPath, "utf8");
   } catch (e) {
-    console.log('Could not read results:', e.message);
+    console.log("Could not read report:", e.message);
     return;
   }
 
-  let status = '✅';
-  if (result.regressions > 0) status = '🔴';
-  else if (result.failed > 0) status = '⚠️';
-
-  let body = `## ${status} Regrada AI Test Results\n\n`;
-  body += `| Tests | Passed | Failed | Regressions |\n`;
-  body += `|:-----:|:------:|:------:|:-----------:|\n`;
-  body += `| ${result.total_tests} | ${result.passed} | ${result.failed} | ${result.regressions} |\n\n`;
-
-  if (result.regressions > 0 && result.comparison?.new_failures) {
-    body += `### 🔴 Regressions Detected\n\n`;
-    body += `These tests were **passing** in the baseline but are now **failing**:\n\n`;
-    result.comparison.new_failures.forEach(name => {
-      body += `- \`${name}\`\n`;
-    });
-    body += `\n`;
+  const summaryLine = report
+    .split("\n")
+    .find((line) => line.startsWith("Total:"));
+  let status = "✅";
+  if (summaryLine) {
+    const match = summaryLine.match(
+      /Total: (\\d+) \\| Passed: (\\d+) \\| Warned: (\\d+) \\| Failed: (\\d+)/,
+    );
+    if (match) {
+      const warned = parseInt(match[3], 10);
+      const failed = parseInt(match[4], 10);
+      if (failed > 0) status = "🔴";
+      else if (warned > 0) status = "⚠️";
+    }
   }
 
-  if (result.failed > 0) {
-    body += `<details><summary>View Failed Tests</summary>\n\n`;
-    result.test_results
-      .filter(t => t.status === 'failed')
-      .forEach(t => {
-        body += `#### \`${t.name}\`\n`;
-        t.checks
-          .filter(c => !c.passed)
-          .forEach(c => {
-            body += `- **${c.check}**: ${c.message || 'Failed'}\n`;
-          });
-        body += `\n`;
-      });
-    body += `</details>\n\n`;
-  }
+  let body = `## ${status} Regrada Report\\n\\n`;
+  body += report;
 
-  if (result.comparison?.new_passes?.length > 0) {
-    body += `### ✅ Improvements\n\n`;
-    body += `These tests were failing but are now passing:\n\n`;
-    result.comparison.new_passes.forEach(name => {
-      body += `- \`${name}\`\n`;
-    });
-    body += `\n`;
-  }
-
-  body += `---\n`;
+  body += `\\n\\n---\\n`;
   body += `*[Regrada](https://github.com/matiasmolinolo/regrada) - CI for AI*`;
 
   // Find existing comment
@@ -64,8 +41,8 @@ module.exports = async ({ github, context, workdir }) => {
     issue_number: context.issue.number,
   });
 
-  const existing = comments.find(c =>
-    c.user.type === 'Bot' && c.body.includes('Regrada AI Test Results')
+  const existing = comments.find(
+    (c) => c.user.type === "Bot" && c.body.includes("Regrada Report"),
   );
 
   if (existing) {
@@ -73,14 +50,14 @@ module.exports = async ({ github, context, workdir }) => {
       owner: context.repo.owner,
       repo: context.repo.repo,
       comment_id: existing.id,
-      body: body
+      body: body,
     });
   } else {
     await github.rest.issues.createComment({
       owner: context.repo.owner,
       repo: context.repo.repo,
       issue_number: context.issue.number,
-      body: body
+      body: body,
     });
   }
 };
