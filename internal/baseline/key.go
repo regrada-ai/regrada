@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/matias/regrada/internal/model"
-	"github.com/matias/regrada/internal/util"
+	"github.com/regrada-ai/regrada/internal/model"
+	"github.com/regrada-ai/regrada/internal/util"
 )
 
 func Key(provider, model string, params *model.SamplingParams, systemPrompt string) (string, string, error) {

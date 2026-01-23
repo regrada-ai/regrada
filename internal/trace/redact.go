@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/matias/regrada/internal/config"
+	"github.com/regrada-ai/regrada/internal/config"
 )
 
 type Redactor interface {

@@ -6,8 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/matias/regrada/internal/git"
-	"github.com/matias/regrada/internal/util"
+	"github.com/regrada-ai/regrada/internal/git"
+	"github.com/regrada-ai/regrada/internal/util"
 )
 
 type Baseline struct {

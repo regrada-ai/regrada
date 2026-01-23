@@ -5,10 +5,10 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/matias/regrada/internal/cases"
-	"github.com/matias/regrada/internal/config"
-	"github.com/matias/regrada/internal/diff"
-	"github.com/matias/regrada/internal/eval"
+	"github.com/regrada-ai/regrada/internal/cases"
+	"github.com/regrada-ai/regrada/internal/config"
+	"github.com/regrada-ai/regrada/internal/diff"
+	"github.com/regrada-ai/regrada/internal/eval"
 )
 
 type Violation struct {

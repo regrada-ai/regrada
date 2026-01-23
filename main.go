@@ -1,6 +1,6 @@
 package main
 
-import "github.com/matias/regrada/cmd"
+import "github.com/regrada-ai/regrada/cmd"
 
 func main() {
 	cmd.Execute()

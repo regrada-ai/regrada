@@ -3,8 +3,8 @@ package diff
 import (
 	"strings"
 
-	"github.com/matias/regrada/internal/baseline"
-	"github.com/matias/regrada/internal/eval"
+	"github.com/regrada-ai/regrada/internal/baseline"
+	"github.com/regrada-ai/regrada/internal/eval"
 )
 
 type DiffResult struct {

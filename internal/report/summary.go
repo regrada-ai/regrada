@@ -3,9 +3,9 @@ package report
 import (
 	"sort"
 
-	"github.com/matias/regrada/internal/diff"
-	"github.com/matias/regrada/internal/eval"
-	"github.com/matias/regrada/internal/policy"
+	"github.com/regrada-ai/regrada/internal/diff"
+	"github.com/regrada-ai/regrada/internal/eval"
+	"github.com/regrada-ai/regrada/internal/policy"
 )
 
 type CaseSummary struct {

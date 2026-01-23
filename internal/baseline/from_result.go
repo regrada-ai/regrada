@@ -1,6 +1,6 @@
 package baseline
 
-import "github.com/matias/regrada/internal/eval"
+import "github.com/regrada-ai/regrada/internal/eval"
 
 func FromResult(result eval.CaseResult, baselineKey, paramsHash string) Baseline {
 	b := Baseline{

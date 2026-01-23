@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/matias/regrada/internal/cases"
-	"github.com/matias/regrada/internal/model"
-	"github.com/matias/regrada/internal/providers"
+	"github.com/regrada-ai/regrada/internal/cases"
+	"github.com/regrada-ai/regrada/internal/model"
+	"github.com/regrada-ai/regrada/internal/providers"
 )
 
 type EvalSettings struct {

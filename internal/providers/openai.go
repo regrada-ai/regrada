@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/matias/regrada/internal/config"
-	"github.com/matias/regrada/internal/model"
+	"github.com/regrada-ai/regrada/internal/config"
+	"github.com/regrada-ai/regrada/internal/model"
 )
 
 type OpenAIProvider struct {

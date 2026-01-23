@@ -3,7 +3,7 @@ package providers
 import (
 	"fmt"
 
-	"github.com/matias/regrada/internal/config"
+	"github.com/regrada-ai/regrada/internal/config"
 )
 
 func Resolve(cfg *config.ProjectConfig) (Provider, error) {

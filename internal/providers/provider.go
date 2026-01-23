@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/matias/regrada/internal/model"
+	"github.com/regrada-ai/regrada/internal/model"
 )
 
 type Provider interface {

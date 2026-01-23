@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/matias/regrada/internal/baseline"
-	"github.com/matias/regrada/internal/cases"
-	"github.com/matias/regrada/internal/config"
-	"github.com/matias/regrada/internal/eval"
-	"github.com/matias/regrada/internal/model"
-	"github.com/matias/regrada/internal/providers"
+	"github.com/regrada-ai/regrada/internal/baseline"
+	"github.com/regrada-ai/regrada/internal/cases"
+	"github.com/regrada-ai/regrada/internal/config"
+	"github.com/regrada-ai/regrada/internal/eval"
+	"github.com/regrada-ai/regrada/internal/model"
+	"github.com/regrada-ai/regrada/internal/providers"
 	"github.com/spf13/cobra"
 )
 

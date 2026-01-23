@@ -3,7 +3,7 @@ package cases
 import (
 	"fmt"
 
-	"github.com/matias/regrada/internal/model"
+	"github.com/regrada-ai/regrada/internal/model"
 	"gopkg.in/yaml.v3"
 )
 

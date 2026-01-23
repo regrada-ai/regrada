@@ -47,8 +47,11 @@ type CaptureConfig struct {
 }
 
 type ProxyConfig struct {
-	Listen   string         `yaml:"listen,omitempty"`
-	Upstream UpstreamConfig `yaml:"upstream,omitempty"`
+	Listen     string         `yaml:"listen,omitempty"`
+	Mode       string         `yaml:"mode,omitempty"` // "forward" or "reverse"
+	CAPath     string         `yaml:"ca_path,omitempty"`
+	AllowHosts []string       `yaml:"allow_hosts,omitempty"`
+	Upstream   UpstreamConfig `yaml:"upstream,omitempty"` // For reverse proxy mode
 }
 
 type UpstreamConfig struct {
@@ -80,27 +83,36 @@ type ProvidersConfig struct {
 
 type OpenAIConfig struct {
 	APIKeyEnv  string `yaml:"api_key_env,omitempty"`
+	APIKey     string `yaml:"api_key,omitempty"`
 	BaseURLEnv string `yaml:"base_url_env,omitempty"`
+	BaseURL    string `yaml:"base_url,omitempty"`
 	Model      string `yaml:"model,omitempty"`
 }
 
 type AnthropicConfig struct {
 	APIKeyEnv  string `yaml:"api_key_env,omitempty"`
+	APIKey     string `yaml:"api_key,omitempty"`
 	BaseURLEnv string `yaml:"base_url_env,omitempty"`
+	BaseURL    string `yaml:"base_url,omitempty"`
 	Model      string `yaml:"model,omitempty"`
 }
 
 type AzureOpenAIConfig struct {
 	APIKeyEnv   string `yaml:"api_key_env,omitempty"`
+	APIKey      string `yaml:"api_key,omitempty"`
 	EndpointEnv string `yaml:"endpoint_env,omitempty"`
+	Endpoint    string `yaml:"endpoint,omitempty"`
 	APIVersion  string `yaml:"api_version,omitempty"`
 	Deployment  string `yaml:"deployment,omitempty"`
 }
 
 type BedrockConfig struct {
 	RegionEnv    string `yaml:"region_env,omitempty"`
+	Region       string `yaml:"region,omitempty"`
 	AccessKeyEnv string `yaml:"access_key_env,omitempty"`
+	AccessKey    string `yaml:"access_key,omitempty"`
 	SecretKeyEnv string `yaml:"secret_key_env,omitempty"`
+	SecretKey    string `yaml:"secret_key,omitempty"`
 	ModelID      string `yaml:"model_id,omitempty"`
 }
 

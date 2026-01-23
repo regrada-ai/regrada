@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/matias/regrada/internal/config"
+	"github.com/regrada-ai/regrada/internal/config"
 )
 
 type discoveredCase struct {

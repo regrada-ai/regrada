@@ -6,10 +6,10 @@ import (
 	"math"
 	"strings"
 
-	"github.com/matias/regrada/internal/cases"
-	"github.com/matias/regrada/internal/model"
-	"github.com/matias/regrada/internal/trace"
-	"github.com/matias/regrada/internal/util"
+	"github.com/regrada-ai/regrada/internal/cases"
+	"github.com/regrada-ai/regrada/internal/model"
+	"github.com/regrada-ai/regrada/internal/trace"
+	"github.com/regrada-ai/regrada/internal/util"
 )
 
 type ConvertOptions struct {
