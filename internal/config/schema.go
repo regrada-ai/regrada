@@ -51,6 +51,7 @@ type ProxyConfig struct {
 	Mode       string         `yaml:"mode,omitempty"` // "forward" or "reverse"
 	CAPath     string         `yaml:"ca_path,omitempty"`
 	AllowHosts []string       `yaml:"allow_hosts,omitempty"`
+	Debug      bool           `yaml:"debug,omitempty"`
 	Upstream   UpstreamConfig `yaml:"upstream,omitempty"` // For reverse proxy mode
 }
 

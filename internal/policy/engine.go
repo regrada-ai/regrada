@@ -122,6 +122,14 @@ func evaluatePolicy(policy config.Policy, res eval.CaseResult, d diff.DiffResult
 				return violation(policy, fmt.Sprintf("latency delta %.0f above %d", delta, *check.LatencyP95.MaxDelta))
 			}
 		}
+	case "assertions":
+		threshold := 1.0
+		if check.MinPassRate != nil {
+			threshold = *check.MinPassRate
+		}
+		if res.Aggregates.PassRate < threshold {
+			return violation(policy, fmt.Sprintf("assertion pass rate %.2f below %.2f", res.Aggregates.PassRate, threshold))
+		}
 	case "json_schema":
 		return violation(policy, "json schema checks not implemented")
 	default:

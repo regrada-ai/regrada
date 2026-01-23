@@ -39,8 +39,13 @@ This command requires sudo/administrator privileges and will:
 - Linux: Add to /usr/local/share/ca-certificates or /etc/pki/ca-trust
 - Windows: Add to Root certificate store
 
-After installation, HTTPS connections through the proxy will be trusted by your system
-and applications.`,
+SECURITY NOTE: The certificate is only used by the Regrada proxy when explicitly
+running 'regrada record'. It does NOT intercept any traffic unless:
+1. The Regrada proxy is actively running
+2. Your application is configured to use the proxy (via HTTP_PROXY env vars)
+
+The certificate sits dormant in your trust store and is only used when you explicitly
+proxy traffic through Regrada.`,
 	RunE: runCAInstall,
 }
 
@@ -99,8 +104,13 @@ func runCAInit(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  Private Key: %s\n", caObj.KeyPath())
 	fmt.Println()
 	fmt.Println("Next steps:")
-	fmt.Println("  1. Install the CA: regrada ca install")
-	fmt.Println("  2. Start recording: regrada record -- <your-command>")
+	fmt.Println("  Local development:")
+	fmt.Println("    1. Install the CA: regrada ca install")
+	fmt.Println("    2. Start recording: regrada record -- <your-command>")
+	fmt.Println()
+	fmt.Println("  CI environments:")
+	fmt.Println("    Skip 'regrada ca install' - the cert will be automatically")
+	fmt.Println("    configured via environment variables when you run 'regrada record'.")
 
 	return nil
 }
@@ -123,7 +133,13 @@ func runCAInstall(cmd *cobra.Command, args []string) error {
 
 	fmt.Println("✓ CA certificate installed successfully")
 	fmt.Println()
-	fmt.Println("HTTPS traffic through the proxy will now be trusted.")
+	fmt.Println("The certificate is now trusted by your system.")
+	fmt.Println()
+	fmt.Println("IMPORTANT: The certificate ONLY intercepts traffic when:")
+	fmt.Println("  - You run 'regrada record -- <command>'")
+	fmt.Println("  - The command's HTTP_PROXY env vars point to the Regrada proxy")
+	fmt.Println()
+	fmt.Println("Normal system traffic is NOT affected by this certificate.")
 	fmt.Println("To remove: regrada ca uninstall")
 
 	return nil

@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 
 	"github.com/regrada-ai/regrada/internal/config"
@@ -96,6 +97,9 @@ func runRecord(cmd *cobra.Command, args []string) error {
 	if cfg.Capture.Proxy.Mode == "forward" {
 		fmt.Printf("Mode: Forward proxy (HTTPS MITM enabled)\n")
 		fmt.Printf("Allowlisted hosts: %v\n", cfg.Capture.Proxy.AllowHosts)
+		if cfg.Capture.Proxy.Debug {
+			fmt.Printf("Debug mode: enabled\n")
+		}
 	}
 
 	// Check if user wants to run a command
@@ -145,12 +149,26 @@ func runWithProxy(args []string, proxyURL string, recorder interface {
 	command.Stdin = os.Stdin
 
 	// Set proxy environment variables
-	command.Env = append(os.Environ(),
+	env := append(os.Environ(),
 		fmt.Sprintf("HTTP_PROXY=%s", proxyURL),
 		fmt.Sprintf("HTTPS_PROXY=%s", proxyURL),
 		fmt.Sprintf("http_proxy=%s", proxyURL),
 		fmt.Sprintf("https_proxy=%s", proxyURL),
 	)
+
+	// For CI environments, add cert path for client libraries to trust
+	// Many HTTP clients support custom CA bundles via env vars
+	if cfg.Capture.Proxy.Mode == "forward" {
+		caPath := filepath.Join(cfg.Capture.Proxy.CAPath, "regrada-ca.pem")
+		env = append(env,
+			fmt.Sprintf("REQUESTS_CA_BUNDLE=%s", caPath),  // Python requests
+			fmt.Sprintf("SSL_CERT_FILE=%s", caPath),       // General purpose
+			fmt.Sprintf("NODE_EXTRA_CA_CERTS=%s", caPath), // Node.js
+			fmt.Sprintf("CURL_CA_BUNDLE=%s", caPath),      // curl
+		)
+	}
+
+	command.Env = env
 
 	// Run command
 	if err := command.Start(); err != nil {

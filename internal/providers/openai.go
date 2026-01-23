@@ -23,24 +23,37 @@ type OpenAIProvider struct {
 }
 
 func NewOpenAIProvider(cfg *config.ProjectConfig) (*OpenAIProvider, error) {
-	apiKeyEnv := cfg.Providers.OpenAI.APIKeyEnv
-	if apiKeyEnv == "" {
-		apiKeyEnv = "OPENAI_API_KEY"
+	// API Key: env var > hardcoded value
+	apiKey := ""
+	if cfg.Providers.OpenAI.APIKeyEnv != "" {
+		apiKey = strings.TrimSpace(os.Getenv(cfg.Providers.OpenAI.APIKeyEnv))
 	}
-	apiKey := strings.TrimSpace(os.Getenv(apiKeyEnv))
+	if apiKey == "" && cfg.Providers.OpenAI.APIKey != "" {
+		apiKey = strings.TrimSpace(cfg.Providers.OpenAI.APIKey)
+	}
 	if apiKey == "" {
-		return nil, fmt.Errorf("missing OpenAI API key in %s", apiKeyEnv)
+		apiKey = strings.TrimSpace(os.Getenv("OPENAI_API_KEY"))
+	}
+	if apiKey == "" {
+		return nil, fmt.Errorf("missing OpenAI API key (set providers.openai.api_key, api_key_env, or OPENAI_API_KEY)")
 	}
 
-	baseEnv := cfg.Providers.OpenAI.BaseURLEnv
-	if baseEnv == "" {
-		baseEnv = "OPENAI_BASE_URL"
+	// Base URL: env var > hardcoded value > default
+	baseURL := ""
+	if cfg.Providers.OpenAI.BaseURLEnv != "" {
+		baseURL = strings.TrimSpace(os.Getenv(cfg.Providers.OpenAI.BaseURLEnv))
 	}
-	baseURL := strings.TrimSpace(os.Getenv(baseEnv))
+	if baseURL == "" && cfg.Providers.OpenAI.BaseURL != "" {
+		baseURL = strings.TrimSpace(cfg.Providers.OpenAI.BaseURL)
+	}
 	if baseURL == "" {
-		baseURL = "https://api.openai.com"
+		baseURL = strings.TrimSpace(os.Getenv("OPENAI_BASE_URL"))
+	}
+	if baseURL == "" {
+		baseURL = "https://api.openai.com/v1"
 	}
 
+	// Model: config > env var
 	modelName := strings.TrimSpace(cfg.Providers.OpenAI.Model)
 	if modelName == "" {
 		modelName = strings.TrimSpace(os.Getenv("OPENAI_MODEL"))

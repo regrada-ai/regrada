@@ -117,6 +117,7 @@ var policyCheckValidators = map[string]func(PolicyCheck) error{
 	"variance":          validateVariance,
 	"refusal_rate":      validateRefusalRate,
 	"latency":           validateLatency,
+	"assertions":        validateAssertions,
 }
 
 func validateJSONValid(check PolicyCheck) error {
@@ -164,6 +165,13 @@ func validateRefusalRate(check PolicyCheck) error {
 func validateLatency(check PolicyCheck) error {
 	if check.LatencyP95 == nil {
 		return errors.New("p95_ms is required")
+	}
+	return nil
+}
+
+func validateAssertions(check PolicyCheck) error {
+	if check.MinPassRate == nil {
+		return errors.New("min_pass_rate is required")
 	}
 	return nil
 }

@@ -106,7 +106,14 @@ func (r *ForwardProxyRecorder) handleRequest(req *http.Request, ctx *goproxy.Pro
 	}
 
 	if !r.matcher.isAllowed(host) {
+		if r.cfg.Capture.Proxy.Debug {
+			fmt.Printf("[DEBUG] Skipping request to %s (not in allowed hosts: %v)\n", host, r.cfg.Capture.Proxy.AllowHosts)
+		}
 		return req, nil
+	}
+
+	if r.cfg.Capture.Proxy.Debug {
+		fmt.Printf("[DEBUG] Capturing request to %s %s\n", req.Method, req.URL.String())
 	}
 
 	// Capture context
@@ -162,6 +169,11 @@ func (r *ForwardProxyRecorder) handleResponse(resp *http.Response, ctx *goproxy.
 		r.session.AddTrace(tr.TraceID)
 	}
 	r.count++
+
+	if r.cfg.Capture.Proxy.Debug {
+		fmt.Printf("[DEBUG] Trace recorded: %s (provider: %s, model: %s, latency: %dms)\n",
+			tr.TraceID, tr.Provider, tr.Model, tr.Metrics.LatencyMS)
+	}
 
 	return resp
 }

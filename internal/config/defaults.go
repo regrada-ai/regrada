@@ -2,8 +2,10 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // applyDefaults sets default values for unspecified configuration fields
@@ -60,12 +62,9 @@ func applyCaptureDefaults(cfg *ProjectConfig) {
 	setDefaultString(&cfg.Capture.Proxy.Mode, "forward")
 	setDefaultString(&cfg.Capture.Proxy.CAPath, ".regrada/ca")
 
-	// Default allow hosts for common LLM providers
+	// Auto-derive allow hosts from provider base URLs
 	if len(cfg.Capture.Proxy.AllowHosts) == 0 && cfg.Capture.Proxy.Mode == "forward" {
-		cfg.Capture.Proxy.AllowHosts = []string{
-			"api.openai.com",
-			"api.anthropic.com",
-		}
+		cfg.Capture.Proxy.AllowHosts = deriveAllowedHosts(cfg)
 	}
 
 	// For reverse proxy mode
@@ -157,4 +156,69 @@ func setDefaultSlice[T any](field *[]T, defaultValue []T) {
 	if len(*field) == 0 {
 		*field = defaultValue
 	}
+}
+
+// deriveAllowedHosts extracts hostnames from provider base URLs
+func deriveAllowedHosts(cfg *ProjectConfig) []string {
+	hosts := make(map[string]bool)
+
+	// Extract from OpenAI
+	if cfg.Providers.OpenAI.BaseURL != "" {
+		if host := extractHost(cfg.Providers.OpenAI.BaseURL); host != "" {
+			hosts[host] = true
+		}
+	} else {
+		// Default OpenAI host
+		hosts["api.openai.com"] = true
+	}
+
+	// Extract from Anthropic
+	if cfg.Providers.Anthropic.BaseURL != "" {
+		if host := extractHost(cfg.Providers.Anthropic.BaseURL); host != "" {
+			hosts[host] = true
+		}
+	} else {
+		// Default Anthropic host
+		hosts["api.anthropic.com"] = true
+	}
+
+	// Extract from Azure OpenAI
+	if cfg.Providers.AzureOpenAI.Endpoint != "" {
+		if host := extractHost(cfg.Providers.AzureOpenAI.Endpoint); host != "" {
+			hosts[host] = true
+		}
+	}
+
+	// Extract from Bedrock (if custom endpoint)
+	if cfg.Providers.Bedrock.Region != "" {
+		// Standard bedrock hostnames
+		hosts[fmt.Sprintf("bedrock-runtime.%s.amazonaws.com", cfg.Providers.Bedrock.Region)] = true
+	}
+
+	// Convert to slice
+	result := make([]string, 0, len(hosts))
+	for host := range hosts {
+		result = append(result, host)
+	}
+
+	return result
+}
+
+// extractHost extracts hostname from a URL string
+func extractHost(rawURL string) string {
+	if rawURL == "" {
+		return ""
+	}
+
+	// Handle URLs without scheme
+	if !strings.Contains(rawURL, "://") {
+		rawURL = "https://" + rawURL
+	}
+
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return ""
+	}
+
+	return parsed.Hostname()
 }
