@@ -31,3 +31,10 @@ go.work
 # OS specific files
 .DS_Store
 Thumbs.db
+
+# Regrada specific files
+.regrada/
+.regrada/report.md
+.regrada/junit.xml
+
+.env

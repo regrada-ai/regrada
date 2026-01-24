@@ -1,56 +1,43 @@
 #!/bin/bash
+set -e
+
+CONFIG_PATH="$1"
+
+if [ -z "$CONFIG_PATH" ]; then
+  CONFIG_PATH="regrada.yml"
+fi
+
+SUMMARY_FILE=".regrada/summary.txt"
+mkdir -p .regrada
+
 set +e
-
-regrada run \
-  --ci \
-  --tests "$1" \
-  --baseline "$2" \
-  --output json > .regrada/results.json 2>&1
-
+regrada test --config "$CONFIG_PATH" | tee "$SUMMARY_FILE"
 EXIT_CODE=$?
+set -e
 
-# Parse results
-if [ -f .regrada/results.json ]; then
-  TOTAL=$(jq -r '.total_tests // 0' .regrada/results.json)
-  PASSED=$(jq -r '.passed // 0' .regrada/results.json)
-  FAILED=$(jq -r '.failed // 0' .regrada/results.json)
-  REGRESSIONS=$(jq -r '.regressions // 0' .regrada/results.json)
-else
+SUMMARY_LINE=$(grep -E "^Total:" "$SUMMARY_FILE" | tail -n 1)
+TOTAL=$(echo "$SUMMARY_LINE" | sed -E 's/.*Total: ([0-9]+).*/\1/')
+PASSED=$(echo "$SUMMARY_LINE" | sed -E 's/.*Passed: ([0-9]+).*/\1/')
+WARNED=$(echo "$SUMMARY_LINE" | sed -E 's/.*Warned: ([0-9]+).*/\1/')
+FAILED=$(echo "$SUMMARY_LINE" | sed -E 's/.*Failed: ([0-9]+).*/\1/')
+
+if [ -z "$TOTAL" ] || [ "$TOTAL" = "$SUMMARY_LINE" ]; then
   TOTAL=0
   PASSED=0
+  WARNED=0
   FAILED=0
-  REGRESSIONS=0
 fi
 
-echo "total=$TOTAL" >> $GITHUB_OUTPUT
-echo "passed=$PASSED" >> $GITHUB_OUTPUT
-echo "failed=$FAILED" >> $GITHUB_OUTPUT
-echo "regressions=$REGRESSIONS" >> $GITHUB_OUTPUT
+echo "total=$TOTAL" >> "$GITHUB_OUTPUT"
+echo "passed=$PASSED" >> "$GITHUB_OUTPUT"
+echo "warned=$WARNED" >> "$GITHUB_OUTPUT"
+echo "failed=$FAILED" >> "$GITHUB_OUTPUT"
 
-# Determine result
-if [ "$REGRESSIONS" -gt 0 ]; then
-  echo "result=regression" >> $GITHUB_OUTPUT
-elif [ "$FAILED" -gt 0 ]; then
-  echo "result=failure" >> $GITHUB_OUTPUT
-else
-  echo "result=success" >> $GITHUB_OUTPUT
+echo "result=success" >> "$GITHUB_OUTPUT"
+if [ "$FAILED" -gt 0 ]; then
+  echo "result=failure" >> "$GITHUB_OUTPUT"
+elif [ "$WARNED" -gt 0 ]; then
+  echo "result=warning" >> "$GITHUB_OUTPUT"
 fi
 
-# Print summary to logs
-echo "## Regrada Results" >> $GITHUB_STEP_SUMMARY
-echo "" >> $GITHUB_STEP_SUMMARY
-echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
-echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
-echo "| Total | $TOTAL |" >> $GITHUB_STEP_SUMMARY
-echo "| Passed | $PASSED |" >> $GITHUB_STEP_SUMMARY
-echo "| Failed | $FAILED |" >> $GITHUB_STEP_SUMMARY
-echo "| Regressions | $REGRESSIONS |" >> $GITHUB_STEP_SUMMARY
-
-# Determine exit code based on inputs
-if [ "$3" = "true" ] && [ "$REGRESSIONS" -gt 0 ]; then
-  echo "exit_code=1" >> $GITHUB_OUTPUT
-elif [ "$4" = "true" ] && [ "$FAILED" -gt 0 ]; then
-  echo "exit_code=1" >> $GITHUB_OUTPUT
-else
-  echo "exit_code=0" >> $GITHUB_OUTPUT
-fi
+echo "exit_code=$EXIT_CODE" >> "$GITHUB_OUTPUT"

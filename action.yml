@@ -1,61 +1,49 @@
-name: 'Regrada - AI Regression Tests'
-description: 'Detect behavioral regressions in LLM-powered apps before they hit production'
-author: 'Regrada'
+name: "Regrada - AI Regression Tests"
+description: "Detect behavioral regressions in LLM-powered apps before they hit production"
+author: "Regrada"
 
 branding:
-  icon: 'shield'
-  color: 'purple'
+  icon: "shield"
+  color: "purple"
 
 inputs:
-  tests:
-    description: 'Path to test suite file'
+  config:
+    description: "Path to regrada.yml or regrada.yaml"
     required: false
-    default: 'evals/tests.yaml'
-  baseline:
-    description: 'Path to baseline file'
-    required: false
-    default: '.regrada/baseline.json'
-  fail-on-regression:
-    description: 'Fail the workflow if regressions are detected'
-    required: false
-    default: 'true'
-  fail-on-failure:
-    description: 'Fail the workflow if any test fails (not just regressions)'
-    required: false
-    default: 'false'
+    default: "regrada.yml"
   comment-on-pr:
-    description: 'Post results as a PR comment'
+    description: "Post results as a PR comment"
     required: false
-    default: 'true'
+    default: "true"
   working-directory:
-    description: 'Working directory for running tests'
+    description: "Working directory for running tests"
     required: false
-    default: '.'
+    default: "."
 
 outputs:
   total:
-    description: 'Total number of tests'
+    description: "Total number of tests"
     value: ${{ steps.run.outputs.total }}
   passed:
-    description: 'Number of passed tests'
+    description: "Number of passed tests"
     value: ${{ steps.run.outputs.passed }}
+  warned:
+    description: "Number of warned tests"
+    value: ${{ steps.run.outputs.warned }}
   failed:
-    description: 'Number of failed tests'
+    description: "Number of failed tests"
     value: ${{ steps.run.outputs.failed }}
-  regressions:
-    description: 'Number of regressions (tests that were passing but now fail)'
-    value: ${{ steps.run.outputs.regressions }}
   result:
-    description: 'Overall result: success, failure, or regression'
+    description: "Overall result: success, warning, or failure"
     value: ${{ steps.run.outputs.result }}
 
 runs:
-  using: 'composite'
+  using: "composite"
   steps:
     - name: Setup Go
       uses: actions/setup-go@v5
       with:
-        go-version: '1.21'
+        go-version: "1.21"
         cache: false
 
     - name: Build Regrada
@@ -71,10 +59,7 @@ runs:
       working-directory: ${{ inputs.working-directory }}
       run: |
         bash ${{ github.action_path }}/action/run-evaluations.sh \
-          "${{ inputs.tests }}" \
-          "${{ inputs.baseline }}" \
-          "${{ inputs.fail-on-regression }}" \
-          "${{ inputs.fail-on-failure }}"
+          "${{ inputs.config }}"
 
     - name: Comment on PR
       if: github.event_name == 'pull_request' && inputs.comment-on-pr == 'true'
@@ -89,8 +74,8 @@ runs:
           });
 
     - name: Check Result
-      if: steps.run.outputs.exit_code == '1'
+      if: steps.run.outputs.exit_code != '0'
       shell: bash
       run: |
-        echo "::error::Regrada detected regressions or failures"
+        echo "::error::Regrada detected policy violations"
         exit 1

@@ -7,29 +7,43 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const version = "0.1.0"
+const version = "0.2.0"
 
 var rootCmd = &cobra.Command{
 	Use:   "regrada",
-	Short: "Regrada - CI/CD for AI applications",
-	Long: `Regrada helps you trace LLM calls and run evaluations to catch regressions.
+	Short: "Regrada - CI gate for LLM behavior",
+	Long: `Regrada records LLM traces, converts them into test cases, and runs evals in CI.
 
 Key commands:
-  regrada init                   Initialize new project with interactive setup
-  regrada trace -- <command>     Trace LLM API calls from command
-  regrada run [options]          Run evaluations and detect regressions
-  regrada version                Show version information`,
+  regrada init        Initialize a project (regrada.yml + example case)
+  regrada record      Start the HTTP proxy recorder
+  regrada accept      Convert recent traces into cases + baselines
+  regrada baseline    Generate baseline snapshots for custom cases
+  regrada test        Run evals, diff against baselines, apply policies`,
 	Version:      version,
 	SilenceUsage: true,
 }
 
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
+		code := 1
+		if exitErr, ok := err.(ExitError); ok {
+			code = exitErr.Code
+			err = exitErr.Err
+		}
 		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		os.Exit(code)
 	}
 }
 
-func init() {
-	// Global flags can be added here if needed
+type ExitError struct {
+	Code int
+	Err  error
+}
+
+func (e ExitError) Error() string {
+	if e.Err == nil {
+		return "exit"
+	}
+	return e.Err.Error()
 }
