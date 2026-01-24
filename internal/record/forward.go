@@ -30,6 +30,7 @@ type ForwardProxyRecorder struct {
 	ca       *ca.CA
 	matcher  *hostMatcher
 	count    int
+	uploader *Uploader
 }
 
 // NewForwardProxyRecorder creates a forward proxy recorder with MITM
@@ -57,6 +58,7 @@ func NewForwardProxyRecorder(cfg *config.ProjectConfig, store trace.Store, redac
 		session:  session,
 		ca:       caObj,
 		matcher:  matcher,
+		uploader: NewUploader(cfg),
 	}
 
 	fpr.setupProxy()
@@ -169,6 +171,11 @@ func (r *ForwardProxyRecorder) handleResponse(resp *http.Response, ctx *goproxy.
 		r.session.AddTrace(tr.TraceID)
 	}
 	r.count++
+
+	// Upload to backend if enabled (async, non-blocking)
+	if r.uploader != nil && r.uploader.IsEnabled() {
+		go r.uploader.Upload(nil, tr)
+	}
 
 	if r.cfg.Capture.Proxy.Debug {
 		fmt.Printf("[DEBUG] Trace recorded: %s (provider: %s, model: %s, latency: %dms)\n",

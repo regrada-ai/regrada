@@ -36,3 +36,5 @@ Thumbs.db
 .regrada/
 .regrada/report.md
 .regrada/junit.xml
+
+.env

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/joho/godotenv"
 	"gopkg.in/yaml.v3"
 )
 
@@ -19,6 +20,17 @@ func LoadProjectConfig(path string) (*ProjectConfig, error) {
 	configPath, err := resolveConfigPath(path)
 	if err != nil {
 		return nil, err
+	}
+
+	// Load .env file from the config directory if it exists
+	configDir := filepath.Dir(configPath)
+	envPath := filepath.Join(configDir, ".env")
+	if _, err := os.Stat(envPath); err == nil {
+		// .env file exists, load it
+		if err := godotenv.Load(envPath); err != nil {
+			// Don't fail if .env can't be loaded, just continue
+			// Environment variables might already be set
+		}
 	}
 
 	data, err := os.ReadFile(configPath)

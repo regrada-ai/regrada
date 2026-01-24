@@ -142,23 +142,41 @@ func applyAsserts(asserts *cases.CaseAssert, output string) (bool, bool, string)
 	}
 
 	if asserts.Text != nil {
+		ignoreCase := asserts.Text.IgnoreCase != nil && *asserts.Text.IgnoreCase
+		compareOutput := output
+		if ignoreCase {
+			compareOutput = strings.ToLower(output)
+		}
+
 		if len(asserts.Text.Contains) > 0 {
 			for _, phrase := range asserts.Text.Contains {
-				if !strings.Contains(output, phrase) {
+				comparePhrase := phrase
+				if ignoreCase {
+					comparePhrase = strings.ToLower(phrase)
+				}
+				if !strings.Contains(compareOutput, comparePhrase) {
 					return false, isJSON(output), fmt.Sprintf("missing phrase: %s", phrase)
 				}
 			}
 		}
 		if len(asserts.Text.NotContains) > 0 {
 			for _, phrase := range asserts.Text.NotContains {
-				if strings.Contains(output, phrase) {
+				comparePhrase := phrase
+				if ignoreCase {
+					comparePhrase = strings.ToLower(phrase)
+				}
+				if strings.Contains(compareOutput, comparePhrase) {
 					return false, isJSON(output), fmt.Sprintf("unexpected phrase: %s", phrase)
 				}
 			}
 		}
 		if len(asserts.Text.Regex) > 0 {
 			for _, pattern := range asserts.Text.Regex {
-				re, err := regexp.Compile(pattern)
+				finalPattern := pattern
+				if ignoreCase && !strings.HasPrefix(pattern, "(?i)") {
+					finalPattern = "(?i)" + pattern
+				}
+				re, err := regexp.Compile(finalPattern)
 				if err != nil {
 					return false, isJSON(output), fmt.Sprintf("invalid regex: %s", pattern)
 				}
@@ -169,7 +187,11 @@ func applyAsserts(asserts *cases.CaseAssert, output string) (bool, bool, string)
 		}
 		if len(asserts.Text.NotRegex) > 0 {
 			for _, pattern := range asserts.Text.NotRegex {
-				re, err := regexp.Compile(pattern)
+				finalPattern := pattern
+				if ignoreCase && !strings.HasPrefix(pattern, "(?i)") {
+					finalPattern = "(?i)" + pattern
+				}
+				re, err := regexp.Compile(finalPattern)
 				if err != nil {
 					return false, isJSON(output), fmt.Sprintf("invalid regex: %s", pattern)
 				}

@@ -47,6 +47,7 @@ type TextAssert struct {
 	Regex       []string `yaml:"regex,omitempty"`
 	NotRegex    []string `yaml:"not_regex,omitempty"`
 	MaxChars    *int     `yaml:"max_chars,omitempty"`
+	IgnoreCase  *bool    `yaml:"ignore_case,omitempty"`
 }
 
 type JSONAssert struct {

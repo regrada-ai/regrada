@@ -1,6 +1,8 @@
 package accept
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -9,7 +11,6 @@ import (
 	"github.com/regrada-ai/regrada/internal/cases"
 	"github.com/regrada-ai/regrada/internal/model"
 	"github.com/regrada-ai/regrada/internal/trace"
-	"github.com/regrada-ai/regrada/internal/util"
 )
 
 type ConvertOptions struct {
@@ -24,14 +25,15 @@ type NormalizeOptions struct {
 }
 
 func FromTrace(t trace.Trace, opts ConvertOptions) (cases.Case, error) {
-	caseID := fmt.Sprintf("recorded.%s", util.ShortHash(t.TraceID))
-
 	messages := t.Request.Messages
 	if opts.Normalize.TrimWhitespace {
 		for i := range messages {
 			messages[i].Content = strings.TrimSpace(messages[i].Content)
 		}
 	}
+
+	// Generate stable case ID based on request content
+	caseID := generateStableCaseID(messages, t.Request.Params)
 
 	caseTags := append([]string{}, opts.DefaultTags...)
 	if t.Provider != "" {
@@ -55,6 +57,37 @@ func FromTrace(t trace.Trace, opts ConvertOptions) (cases.Case, error) {
 	}
 
 	return c, nil
+}
+
+// generateStableCaseID creates a deterministic case ID based on request content
+func generateStableCaseID(messages []model.Message, params *model.SamplingParams) string {
+	h := sha256.New()
+
+	// Hash messages
+	for _, msg := range messages {
+		h.Write([]byte(msg.Role))
+		h.Write([]byte("\x00"))
+		h.Write([]byte(msg.Content))
+		h.Write([]byte("\x00"))
+	}
+
+	// Hash parameters if present
+	if params != nil {
+		h.Write([]byte(fmt.Sprintf("%v", params.Temperature)))
+		h.Write([]byte("\x00"))
+		h.Write([]byte(fmt.Sprintf("%v", params.TopP)))
+		h.Write([]byte("\x00"))
+		h.Write([]byte(fmt.Sprintf("%v", params.MaxOutputTokens)))
+		h.Write([]byte("\x00"))
+		for _, stop := range params.Stop {
+			h.Write([]byte(stop))
+			h.Write([]byte("\x00"))
+		}
+	}
+
+	sum := h.Sum(nil)
+	shortHash := hex.EncodeToString(sum[:4]) // Use first 4 bytes (8 hex chars)
+	return fmt.Sprintf("recorded.%s", shortHash)
 }
 
 func inferAsserts(output string) *cases.CaseAssert {

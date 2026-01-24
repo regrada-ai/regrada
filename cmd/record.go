@@ -104,7 +104,7 @@ func runRecord(cmd *cobra.Command, args []string) error {
 
 	// Check if user wants to run a command
 	if len(args) > 0 {
-		return runWithProxy(args, proxyURL, recorder, session, cfg)
+		return runWithProxy(cmd, args, proxyURL, recorder, session, cfg)
 	}
 
 	// Interactive mode - wait for signal
@@ -131,7 +131,7 @@ func runRecord(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runWithProxy(args []string, proxyURL string, recorder interface {
+func runWithProxy(cmd *cobra.Command, args []string, proxyURL string, recorder interface {
 	Stop() error
 	TraceCount() int
 	Session() *record.Session

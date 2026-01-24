@@ -20,6 +20,7 @@ func applyDefaults(cfg *ProjectConfig, configPath string) error {
 		return err
 	}
 	applyRecordDefaults(cfg)
+	applyBackendDefaults(cfg)
 	return nil
 }
 
@@ -122,6 +123,16 @@ func applyRecordDefaults(cfg *ProjectConfig) {
 	setDefaultBoolPtr(&cfg.Record.Accept.InferAsserts, true)
 	setDefaultBoolPtr(&cfg.Record.Accept.Normalize.TrimWhitespace, true)
 	setDefaultBoolPtr(&cfg.Record.Accept.Normalize.DropVolatileFields, true)
+}
+
+func applyBackendDefaults(cfg *ProjectConfig) {
+	setDefaultBoolPtr(&cfg.Backend.Enabled, false) // Disabled by default
+	setDefaultString(&cfg.Backend.APIKeyEnv, "REGRADA_API_KEY")
+
+	setDefaultBoolPtr(&cfg.Backend.Upload.Traces, true)
+	setDefaultBoolPtr(&cfg.Backend.Upload.TestResults, true)
+	setDefaultBoolPtr(&cfg.Backend.Upload.Async, false)
+	setDefaultInt(&cfg.Backend.Upload.BatchSize, 50)
 }
 
 // Helper functions to reduce repetition

@@ -29,6 +29,7 @@ type ProxyRecorder struct {
 	stopAfter int
 	mu        sync.Mutex
 	count     int
+	uploader  *Uploader
 }
 
 func NewProxyRecorder(cfg *config.ProjectConfig, store trace.Store, redactor trace.Redactor, session *Session) *ProxyRecorder {
@@ -38,6 +39,7 @@ func NewProxyRecorder(cfg *config.ProjectConfig, store trace.Store, redactor tra
 		redactor: redactor,
 		session:  session,
 		done:     make(chan struct{}),
+		uploader: NewUploader(cfg),
 	}
 }
 
@@ -96,6 +98,8 @@ func (r *ProxyRecorder) handle(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	fmt.Printf("[proxy] %s %s → %s\n", req.Method, req.URL.Path, provider)
+
 	start := time.Now()
 	requestBody, _ := io.ReadAll(req.Body)
 	_ = req.Body.Close()
@@ -116,6 +120,13 @@ func (r *ProxyRecorder) handle(w http.ResponseWriter, req *http.Request) {
 			r.session.AddTrace(traceRecord.TraceID)
 		}
 		r.incrementCount()
+
+		// Upload to backend if enabled (async, non-blocking)
+		if r.uploader != nil && r.uploader.IsEnabled() {
+			go r.uploader.Upload(nil, traceRecord)
+		}
+
+		fmt.Printf("[proxy] ✓ captured trace %s (%dms)\n", traceRecord.TraceID, traceRecord.Metrics.LatencyMS)
 		return nil
 	}
 	proxy.ErrorHandler = func(rw http.ResponseWriter, req *http.Request, err error) {

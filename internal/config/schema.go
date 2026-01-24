@@ -11,6 +11,7 @@ type ProjectConfig struct {
 	Report    ReportConfig    `yaml:"report,omitempty"`
 	CI        CIConfig        `yaml:"ci,omitempty"`
 	Record    RecordConfig    `yaml:"record,omitempty"`
+	Backend   BackendConfig   `yaml:"backend,omitempty"`
 }
 
 type ProjectMeta struct {
@@ -212,4 +213,18 @@ type AcceptConfig struct {
 type NormalizeConfig struct {
 	TrimWhitespace     *bool `yaml:"trim_whitespace,omitempty"`
 	DropVolatileFields *bool `yaml:"drop_volatile_fields,omitempty"`
+}
+
+type BackendConfig struct {
+	Enabled   *bool        `yaml:"enabled,omitempty"`
+	APIKeyEnv string       `yaml:"api_key_env,omitempty"`
+	ProjectID string       `yaml:"project_id,omitempty"`
+	Upload    UploadConfig `yaml:"upload,omitempty"`
+}
+
+type UploadConfig struct {
+	Traces      *bool `yaml:"traces,omitempty"`
+	TestResults *bool `yaml:"test_results,omitempty"`
+	Async       *bool `yaml:"async,omitempty"`
+	BatchSize   int   `yaml:"batch_size,omitempty"`
 }
