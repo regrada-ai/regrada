@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Regrada-Proprietary
+
 const fs = require('fs');
 
 module.exports = async ({ github, context, workdir }) => {

@@ -243,4 +243,8 @@ your-project/
 
 ## License
 
-MIT License - see [LICENSE](LICENSE) for details.
+This project is proprietary software owned by Regrada, Inc.
+All rights reserved.
+
+No use, reproduction, modification, or distribution is permitted
+without explicit written authorization from Regrada, Inc.

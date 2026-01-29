@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: LicenseRef-Regrada-Proprietary
+
 package trace
 
 import (
