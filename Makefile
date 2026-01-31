@@ -1,10 +1,8 @@
-.PHONY: build build-static build-obfuscated clean install test run help docker docker-run docker-push docker-multi
+.PHONY: build build-static build-obfuscated clean install test run help
 
 BINARY_NAME=regrada
 BUILD_DIR=./bin
 MAIN_PATH=.
-DOCKER_IMAGE=regrada
-DOCKER_TAG=latest
 
 # Build flags for smaller binaries
 LDFLAGS=-s -w
@@ -73,22 +71,3 @@ vet: ## Run go vet
 lint: fmt vet ## Run linters
 
 all: clean deps lint test build ## Run all tasks
-
-# Docker targets
-docker: ## Build Docker image (obfuscated, minimal ~5MB)
-	@echo "Building Docker image $(DOCKER_IMAGE):$(DOCKER_TAG)..."
-	docker build -t $(DOCKER_IMAGE):$(DOCKER_TAG) .
-	@echo "✓ Docker build complete"
-	@docker images $(DOCKER_IMAGE):$(DOCKER_TAG) --format "Image size: {{.Size}}"
-
-docker-run: ## Run Docker container
-	docker run --rm -it $(DOCKER_IMAGE):$(DOCKER_TAG)
-
-docker-push: ## Push Docker image to registry
-	docker push $(DOCKER_IMAGE):$(DOCKER_TAG)
-
-docker-multi: ## Build multi-arch Docker image (amd64/arm64)
-	@echo "Building multi-arch Docker image..."
-	docker buildx build --platform linux/amd64,linux/arm64 -t $(DOCKER_IMAGE):$(DOCKER_TAG) .
-	@echo "✓ Multi-arch build complete"
-
