@@ -41,12 +41,17 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Build artifact
+      - name: Install garble
+        run: go install mvdan.cc/garble@latest
+
+      - name: Build obfuscated artifact
         shell: bash
         run: |
           set -euo pipefail
           out="regrada_${VERSION}_${{ matrix.goos }}_${{ matrix.goarch }}"
-          GOOS="${{ matrix.goos }}" GOARCH="${{ matrix.goarch }}" CGO_ENABLED=0 go build -o regrada .
+          GOOS="${{ matrix.goos }}" GOARCH="${{ matrix.goarch }}" CGO_ENABLED=0 \
+            garble -literals -tiny -seed=random build \
+            -ldflags="-s -w" -trimpath -o regrada .
           mkdir -p "dist/$VERSION"
           tar -czf "dist/$VERSION/${out}.tar.gz" regrada
           rm regrada
